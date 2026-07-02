@@ -5,8 +5,8 @@
 use tuirealm::command::{Cmd, CmdResult, Direction, Position};
 use tuirealm::component::Component;
 use tuirealm::props::{
-    AttrValue, Attribute, Borders, Color, HorizontalAlignment, Props, QueryResult, SpanStatic,
-    Style, Table, TextModifiers, Title,
+    AttrValue, Attribute, Borders, Color, HorizontalAlignment, PropValue, Props, QueryResult,
+    SpanStatic, Style, Table, TextModifiers, Title,
 };
 use tuirealm::ratatui::text::{Line, Span};
 use tuirealm::ratatui::widgets::{List as TuiList, ListDirection, ListItem, ListState};
@@ -15,6 +15,8 @@ use tuirealm::state::{State, StateValue};
 pub const FILE_LIST_CMD_SELECT_ALL: &str = "A";
 pub const FILE_LIST_CMD_DESELECT_ALL: &str = "D";
 const PROP_DOT_DOT: &str = "dot_dot";
+pub const PROP_ROW_INDICES: &str = "row_indices";
+pub const PROP_VISUAL_INDEX: &str = "visual_index";
 
 /// OwnStates contains states for this component
 #[derive(Clone, Default)]
@@ -22,55 +24,64 @@ struct OwnStates {
     list_index: usize, // Index of selected element in list
     list_len: usize,   // Length of the list
     dot_dot: bool,
+    row_indices: Vec<Option<usize>>,
 }
 
 impl OwnStates {
     /// Initialize list states
     pub fn init_list_states(&mut self, len: usize, has_dot_dot: bool) {
-        self.list_len = len + if has_dot_dot { 1 } else { 0 };
-        self.fix_list_index();
         self.dot_dot = has_dot_dot;
+        self.list_len = len + if has_dot_dot { 1 } else { 0 };
+        self.row_indices = (0..len).map(Some).collect();
+        self.fix_list_index();
+    }
+
+    pub fn set_row_indices(&mut self, row_indices: Vec<Option<usize>>) {
+        self.row_indices = row_indices;
+        self.list_len = self.row_indices.len() + if self.dot_dot { 1 } else { 0 };
+        self.fix_list_index();
     }
 
     /// Incremenet list index.
     /// If `can_rewind` is `true` the index rewinds when boundary is reached
     pub fn incr_list_index(&mut self, can_rewind: bool) {
-        // Check if index is at last element
-        if self.list_index + 1 < self.list_len() {
-            self.list_index += 1;
-        } else if can_rewind {
-            self.list_index = 0;
-        }
+        let Some(next) = self.next_selectable_down(can_rewind) else {
+            return;
+        };
+        self.list_index = next;
     }
 
-    pub fn real_index(&self) -> usize {
+    pub fn real_index(&self) -> Option<usize> {
         if self.dot_dot {
-            self.list_index.saturating_sub(1)
+            self.row_indices
+                .get(self.list_index.saturating_sub(1))
+                .copied()
+                .flatten()
         } else {
-            self.list_index
+            self.row_indices.get(self.list_index).copied().flatten()
         }
     }
 
     /// Decrement list index
     /// If `can_rewind` is `true` the index rewinds when boundary is reached
     pub fn decr_list_index(&mut self, can_rewind: bool) {
-        // Check if index is bigger than 0
-        if self.list_index > 0 {
-            self.list_index -= 1;
-        } else if self.list_len() > 0 && can_rewind {
-            self.list_index = self.list_len() - 1;
-        }
+        let Some(next) = self.next_selectable_up(can_rewind) else {
+            return;
+        };
+        self.list_index = next;
     }
 
     pub fn list_index_at_first(&mut self) {
-        self.list_index = 0;
+        self.list_index = (0..self.list_len())
+            .find(|idx| self.is_selectable(*idx))
+            .unwrap_or(0);
     }
 
     pub fn list_index_at_last(&mut self) {
-        self.list_index = match self.list_len() {
-            0 => 0,
-            len => len - 1,
-        };
+        self.list_index = (0..self.list_len())
+            .rev()
+            .find(|idx| self.is_selectable(*idx))
+            .unwrap_or(0);
     }
 
     /// Returns the length of the file list, which is actually the capacity of the selection vector
@@ -85,6 +96,65 @@ impl OwnStates {
         } else if self.list_len() == 0 {
             self.list_index = 0;
         }
+
+        if !self.is_selectable(self.list_index) {
+            self.list_index_at_first();
+        }
+    }
+
+    fn is_selectable(&self, idx: usize) -> bool {
+        if idx >= self.list_len() {
+            return false;
+        }
+        if self.dot_dot && idx == 0 {
+            return true;
+        }
+        let row_idx = if self.dot_dot {
+            idx.saturating_sub(1)
+        } else {
+            idx
+        };
+        self.row_indices.get(row_idx).is_some_and(Option::is_some)
+    }
+
+    fn next_selectable_down(&self, can_rewind: bool) -> Option<usize> {
+        if self.list_len() == 0 {
+            return None;
+        }
+        let mut idx = self.list_index;
+        for _ in 0..self.list_len() {
+            if idx + 1 < self.list_len() {
+                idx += 1;
+            } else if can_rewind {
+                idx = 0;
+            } else {
+                return None;
+            }
+            if self.is_selectable(idx) {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    fn next_selectable_up(&self, can_rewind: bool) -> Option<usize> {
+        if self.list_len() == 0 {
+            return None;
+        }
+        let mut idx = self.list_index;
+        for _ in 0..self.list_len() {
+            if idx > 0 {
+                idx -= 1;
+            } else if can_rewind {
+                idx = self.list_len() - 1;
+            } else {
+                return None;
+            }
+            if self.is_selectable(idx) {
+                return Some(idx);
+            }
+        }
+        None
     }
 }
 
@@ -132,6 +202,10 @@ impl FileList {
     pub fn dot_dot(mut self, show: bool) -> Self {
         self.attr(Attribute::Custom(PROP_DOT_DOT), AttrValue::Flag(show));
         self
+    }
+
+    pub fn visual_index(&self) -> usize {
+        self.states.list_index
     }
 
     /// Returns the value of the `dot_dot` property
@@ -241,16 +315,40 @@ impl Component for FileList {
     }
 
     fn attr(&mut self, attr: Attribute, value: AttrValue) {
-        self.props.set(attr, value);
-        if matches!(attr, Attribute::Content) {
-            let len = self
-                .props
-                .get(Attribute::Content)
-                .and_then(AttrValue::as_table)
-                .map(std::vec::Vec::len)
-                .unwrap_or(0);
-            self.states.init_list_states(len, self.has_dot_dot());
-            self.states.fix_list_index();
+        self.props.set(attr, value.clone());
+        match attr {
+            Attribute::Content => {
+                let len = self
+                    .props
+                    .get(Attribute::Content)
+                    .and_then(AttrValue::as_table)
+                    .map(std::vec::Vec::len)
+                    .unwrap_or(0);
+                self.states.init_list_states(len, self.has_dot_dot());
+                self.states.fix_list_index();
+            }
+            Attribute::Custom(PROP_ROW_INDICES) => {
+                let row_indices = value
+                    .unwrap_payload()
+                    .unwrap_vec()
+                    .into_iter()
+                    .map(|value| match value {
+                        PropValue::Isize(idx) if idx >= 0 => Some(idx as usize),
+                        _ => None,
+                    })
+                    .collect();
+                self.states.set_row_indices(row_indices);
+            }
+            Attribute::Custom(PROP_VISUAL_INDEX) => {
+                let index = value.unwrap_payload().unwrap_single().unwrap_usize();
+                self.states.list_index = index.min(self.states.list_len().saturating_sub(1));
+            }
+            Attribute::Focus => {
+                if value.unwrap_flag() && !self.states.is_selectable(self.states.list_index) {
+                    self.states.fix_list_index();
+                }
+            }
+            _ => {}
         }
     }
 
@@ -263,11 +361,7 @@ impl Component for FileList {
             return State::Single(StateValue::String("..".to_string()));
         }
 
-        State::Single(StateValue::Usize(if self.has_dot_dot() {
-            self.states.list_index.saturating_sub(1)
-        } else {
-            self.states.list_index
-        }))
+        State::Single(StateValue::Usize(self.states.real_index().unwrap_or(0)))
     }
 
     fn perform(&mut self, cmd: Cmd) -> CmdResult {
@@ -331,12 +425,10 @@ impl Component for FileList {
                     return CmdResult::NoChange;
                 }
 
-                let index = self.states.real_index();
-                self.states.list_index = self
-                    .states
-                    .list_index
-                    .saturating_add(1)
-                    .min(self.states.list_len.saturating_sub(1));
+                let Some(index) = self.states.real_index() else {
+                    return CmdResult::NoChange;
+                };
+                self.states.incr_list_index(false);
                 CmdResult::Changed(State::Single(StateValue::Usize(index)))
             }
             _ => CmdResult::NoChange,

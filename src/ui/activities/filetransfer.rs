@@ -5,6 +5,7 @@
 // This module is split into files, cause it's just too big
 mod actions;
 mod components;
+mod diff;
 mod fswatcher;
 mod lib;
 mod misc;
@@ -54,6 +55,7 @@ enum Id {
     ChmodPopup,
     CopyPopup,
     DeletePopup,
+    DiffPopup,
     DisconnectPopup,
     ErrorPopup,
     ExplorerFind,
@@ -148,6 +150,7 @@ enum UiMsg {
     CloseChmodPopup,
     CloseCopyPopup,
     CloseDeletePopup,
+    CloseDiffPopup,
     CloseDisconnectPopup,
     CloseErrorPopup,
     CloseExecPopup,
@@ -183,6 +186,7 @@ enum UiMsg {
     ShowChmodPopup,
     ShowCopyPopup,
     ShowDeletePopup,
+    ShowDiffPopup,
     ShowDisconnectPopup,
     ShowTerminal,
     ShowFileInfoPopup,
@@ -202,6 +206,7 @@ enum UiMsg {
     ShowWatcherPopup,
     ToggleHiddenFiles,
     ToggleSyncBrowsing,
+    SyncScrollTo(usize),
     WindowResized,
 }
 

@@ -14,12 +14,12 @@ mod misc;
 mod popups;
 mod selected_files;
 mod terminal;
-mod transfer;
+pub(crate) mod transfer;
 
 pub use misc::FooterBar;
 pub use popups::{
-    ATTR_FILES, ChmodPopup, CopyPopup, DeletePopup, DisconnectPopup, ErrorPopup, FatalPopup,
-    FileInfoPopup, FilterPopup, GotoPopup, KeybindingsPopup, MkdirPopup, NewfilePopup,
+    ATTR_FILES, ChmodPopup, CopyPopup, DeletePopup, DiffPopup, DisconnectPopup, ErrorPopup,
+    FatalPopup, FileInfoPopup, FilterPopup, GotoPopup, KeybindingsPopup, MkdirPopup, NewfilePopup,
     OpenWithPopup, QuitPopup, RenamePopup, ReplacePopup, SaveAsPopup, SortingPopup, StatusBarLocal,
     StatusBarRemote, SymlinkPopup, SyncBrowsingMkdirPopup, TransferProgressBar, WaitPopup,
     WalkdirWaitPopup, WatchedPathsList, WatcherPopup,

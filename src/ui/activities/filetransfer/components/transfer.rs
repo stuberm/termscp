@@ -2,7 +2,7 @@
 //!
 //! file transfer components
 
-mod file_list;
+pub(crate) mod file_list;
 mod file_list_with_search;
 
 use tuirealm::command::{Cmd, CmdResult, Direction, Position};
@@ -413,6 +413,14 @@ impl ExplorerLocal {
                 .dot_dot(true),
         }
     }
+
+    fn sync_scroll_after(&mut self, cmd: Cmd) -> Option<Msg> {
+        if matches!(self.perform(cmd), CmdResult::Changed(_)) {
+            Some(Msg::Ui(UiMsg::SyncScrollTo(self.component.visual_index())))
+        } else {
+            Some(Msg::None)
+        }
+    }
 }
 
 impl AppComponent<Msg, NoUserEvent> for ExplorerLocal {
@@ -420,36 +428,22 @@ impl AppComponent<Msg, NoUserEvent> for ExplorerLocal {
         match ev {
             Event::Keyboard(KeyEvent {
                 code: Key::Down, ..
-            }) => {
-                self.perform(Cmd::Move(Direction::Down));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Move(Direction::Down)),
             Event::Keyboard(KeyEvent { code: Key::Up, .. }) => {
-                self.perform(Cmd::Move(Direction::Up));
-                Some(Msg::None)
+                self.sync_scroll_after(Cmd::Move(Direction::Up))
             }
             Event::Keyboard(KeyEvent {
                 code: Key::PageDown,
                 ..
-            }) => {
-                self.perform(Cmd::Scroll(Direction::Down));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Scroll(Direction::Down)),
             Event::Keyboard(KeyEvent {
                 code: Key::PageUp, ..
-            }) => {
-                self.perform(Cmd::Scroll(Direction::Up));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Scroll(Direction::Up)),
             Event::Keyboard(KeyEvent {
                 code: Key::Home, ..
-            }) => {
-                self.perform(Cmd::GoTo(Position::Begin));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::GoTo(Position::Begin)),
             Event::Keyboard(KeyEvent { code: Key::End, .. }) => {
-                self.perform(Cmd::GoTo(Position::End));
-                Some(Msg::None)
+                self.sync_scroll_after(Cmd::GoTo(Position::End))
             }
             Event::Keyboard(KeyEvent {
                 code: Key::Char('a'),
@@ -524,6 +518,10 @@ impl AppComponent<Msg, NoUserEvent> for ExplorerLocal {
                 code: Key::Char('d') | Key::Function(7),
                 modifiers: KeyModifiers::NONE,
             }) => Some(Msg::Ui(UiMsg::ShowMkdirPopup)),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('D'),
+                ..
+            }) => Some(Msg::Ui(UiMsg::ShowDiffPopup)),
             Event::Keyboard(KeyEvent {
                 code: Key::Char('e') | Key::Delete | Key::Function(8),
                 modifiers: KeyModifiers::NONE,
@@ -640,6 +638,14 @@ impl ExplorerRemote {
                 .dot_dot(true),
         }
     }
+
+    fn sync_scroll_after(&mut self, cmd: Cmd) -> Option<Msg> {
+        if matches!(self.perform(cmd), CmdResult::Changed(_)) {
+            Some(Msg::Ui(UiMsg::SyncScrollTo(self.component.visual_index())))
+        } else {
+            Some(Msg::None)
+        }
+    }
 }
 
 impl AppComponent<Msg, NoUserEvent> for ExplorerRemote {
@@ -647,36 +653,22 @@ impl AppComponent<Msg, NoUserEvent> for ExplorerRemote {
         match ev {
             Event::Keyboard(KeyEvent {
                 code: Key::Down, ..
-            }) => {
-                self.perform(Cmd::Move(Direction::Down));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Move(Direction::Down)),
             Event::Keyboard(KeyEvent { code: Key::Up, .. }) => {
-                self.perform(Cmd::Move(Direction::Up));
-                Some(Msg::None)
+                self.sync_scroll_after(Cmd::Move(Direction::Up))
             }
             Event::Keyboard(KeyEvent {
                 code: Key::PageDown,
                 ..
-            }) => {
-                self.perform(Cmd::Scroll(Direction::Down));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Scroll(Direction::Down)),
             Event::Keyboard(KeyEvent {
                 code: Key::PageUp, ..
-            }) => {
-                self.perform(Cmd::Scroll(Direction::Up));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::Scroll(Direction::Up)),
             Event::Keyboard(KeyEvent {
                 code: Key::Home, ..
-            }) => {
-                self.perform(Cmd::GoTo(Position::Begin));
-                Some(Msg::None)
-            }
+            }) => self.sync_scroll_after(Cmd::GoTo(Position::Begin)),
             Event::Keyboard(KeyEvent { code: Key::End, .. }) => {
-                self.perform(Cmd::GoTo(Position::End));
-                Some(Msg::None)
+                self.sync_scroll_after(Cmd::GoTo(Position::End))
             }
             Event::Keyboard(KeyEvent {
                 code: Key::Char('a'),
@@ -751,6 +743,10 @@ impl AppComponent<Msg, NoUserEvent> for ExplorerRemote {
                 code: Key::Char('d') | Key::Function(7),
                 modifiers: KeyModifiers::NONE,
             }) => Some(Msg::Ui(UiMsg::ShowMkdirPopup)),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('D'),
+                ..
+            }) => Some(Msg::Ui(UiMsg::ShowDiffPopup)),
             Event::Keyboard(KeyEvent {
                 code: Key::Char('e') | Key::Delete | Key::Function(8),
                 modifiers: KeyModifiers::NONE,

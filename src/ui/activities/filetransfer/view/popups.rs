@@ -8,6 +8,7 @@ use tuirealm::props::{AttrValue, Attribute, BorderSides, PropPayload, PropValue,
 use crate::explorer::FileSorting;
 use crate::ui::activities::filetransfer::browser::FileExplorerTab;
 use crate::ui::activities::filetransfer::components::ATTR_FILES;
+use crate::ui::activities::filetransfer::diff::DiffView;
 use crate::ui::activities::filetransfer::{FileTransferActivity, Id, components, ui_result};
 
 impl FileTransferActivity {
@@ -581,6 +582,20 @@ impl FileTransferActivity {
 
     pub(in crate::ui::activities::filetransfer) fn umount_file_info(&mut self) {
         let _ = self.app.umount(&Id::FileInfoPopup);
+    }
+
+    pub(in crate::ui::activities::filetransfer) fn mount_diff(&mut self, diff: DiffView) {
+        let color = self.theme().misc_info_dialog;
+        ui_result(self.app.remount(
+            Id::DiffPopup,
+            Box::new(components::DiffPopup::new(diff, color)),
+            vec![],
+        ));
+        ui_result(self.app.active(&Id::DiffPopup));
+    }
+
+    pub(in crate::ui::activities::filetransfer) fn umount_diff(&mut self) {
+        let _ = self.app.umount(&Id::DiffPopup);
     }
 
     pub(in crate::ui::activities::filetransfer) fn mount_symlink(&mut self) {

@@ -5,6 +5,7 @@
 mod chmod;
 mod copy;
 mod delete;
+mod diff;
 mod disconnect;
 mod error;
 mod file_info;
@@ -28,6 +29,7 @@ mod watcher;
 pub use self::chmod::ChmodPopup;
 pub use self::copy::CopyPopup;
 pub use self::delete::DeletePopup;
+pub use self::diff::DiffPopup;
 pub use self::disconnect::DisconnectPopup;
 pub use self::error::{ErrorPopup, FatalPopup};
 pub use self::file_info::FileInfoPopup;

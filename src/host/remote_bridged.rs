@@ -164,15 +164,11 @@ impl HostBridge for RemoteBridged {
     }
 
     fn open_file(&mut self, file: &Path) -> HostResult<Box<dyn Read + Send>> {
-        // try to use stream, otherwise download to a temporary file and return a reader
-        match self.remote.open(file) {
-            Ok(stream) => Ok(Box::new(stream)),
-            Err(RemoteError {
-                kind: RemoteErrorType::UnsupportedFeature,
-                ..
-            }) => self.open_file_from_temp(file),
-            Err(e) => Err(HostError::from(e)),
-        }
+        // Always materialize remote reads into a local temporary file before returning
+        // a reader. Returning a live remote stream can keep protocol data connections
+        // open while the UI continues to issue other commands (notably FTP/FTPS LIST),
+        // which causes errors such as "Data connection is already open".
+        self.open_file_from_temp(file)
     }
 
     fn create_file(

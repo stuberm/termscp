@@ -181,6 +181,7 @@ impl FileTransferActivity {
                 Id::TransferProgressBarFull,
                 Id::DeletePopup,
                 Id::ReplacePopup,
+                Id::DiffPopup,
                 Id::DisconnectPopup,
                 Id::QuitPopup,
                 Id::WatchedPathsList,
@@ -280,6 +281,7 @@ impl FileTransferActivity {
                 (Size::Percentage(50), Size::Unit(3))
             }
             Id::FileInfoPopup => (Size::Percentage(80), Size::Percentage(50)),
+            Id::DiffPopup => (Size::Percentage(95), Size::Percentage(85)),
             Id::DeletePopup | Id::DisconnectPopup | Id::QuitPopup => {
                 (Size::Percentage(30), Size::Unit(3))
             }
@@ -373,6 +375,7 @@ impl FileTransferActivity {
         tuirealm::subclause_and_not!(
             Id::CopyPopup,
             Id::DeletePopup,
+            Id::DiffPopup,
             Id::DisconnectPopup,
             Id::ErrorPopup,
             Id::TerminalHostBridge,

@@ -61,6 +61,11 @@ impl KeybindingsPopup {
                         .add_col(SpanStatic::raw("<D|F7>").bold().fg(key_color))
                         .add_col(SpanStatic::from("            Make directory"))
                         .add_row()
+                        .add_col(SpanStatic::raw("<SHIFT+D>").bold().fg(key_color))
+                        .add_col(SpanStatic::from(
+                            "        Compare selected local and remote files",
+                        ))
+                        .add_row()
                         .add_col(SpanStatic::raw("<F>").bold().fg(key_color))
                         .add_col(SpanStatic::from("               Search files"))
                         .add_row()

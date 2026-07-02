@@ -21,6 +21,7 @@ pub(crate) mod change_dir;
 pub(crate) mod chmod;
 pub(crate) mod copy;
 pub(crate) mod delete;
+pub(crate) mod diff;
 pub(crate) mod edit;
 pub(crate) mod exec;
 pub(crate) mod file_size;

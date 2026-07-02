@@ -5,11 +5,13 @@
 // locals
 // externals
 use remotefs::fs::File;
+use tuirealm::props::{AttrValue, Attribute, PropPayload, PropValue};
 use tuirealm::state::{State, StateValue};
 
 use super::actions::SelectedFile;
 use super::actions::walkdir::WalkdirError;
 use super::browser::{FileExplorerTab, FoundExplorerTab};
+use super::components::transfer::file_list::PROP_VISUAL_INDEX;
 use super::{
     ExitReason, FileTransferActivity, Id, MarkQueue, Msg, TransferMsg, TransferOpts, UiMsg,
     ui_result,
@@ -342,6 +344,7 @@ impl FileTransferActivity {
             }
             UiMsg::CloseCopyPopup => self.umount_copy(),
             UiMsg::CloseDeletePopup => self.umount_radio_delete(),
+            UiMsg::CloseDiffPopup => self.umount_diff(),
             UiMsg::CloseDisconnectPopup => self.umount_disconnect(),
             UiMsg::CloseErrorPopup => self.umount_error(),
             UiMsg::CloseExecPopup => {
@@ -464,6 +467,10 @@ impl FileTransferActivity {
             }
             UiMsg::ShowCopyPopup => self.mount_copy(),
             UiMsg::ShowDeletePopup => self.mount_radio_delete(),
+            UiMsg::ShowDiffPopup => match self.action_diff_files() {
+                Ok(diff) => self.mount_diff(diff),
+                Err(err) => self.mount_error(err),
+            },
             UiMsg::ShowDisconnectPopup => self.mount_disconnect(),
             UiMsg::ShowTerminal => {
                 self.browser.toggle_terminal(true);
@@ -515,6 +522,22 @@ impl FileTransferActivity {
             UiMsg::ToggleSyncBrowsing => {
                 self.browser.toggle_sync_browsing();
                 self.refresh_remote_status_bar();
+            }
+            UiMsg::SyncScrollTo(index) => {
+                if self.browser.sync_browsing && self.browser.found().is_none() {
+                    let opposite = match self.browser.tab() {
+                        FileExplorerTab::HostBridge => Some(Id::ExplorerRemote),
+                        FileExplorerTab::Remote => Some(Id::ExplorerHostBridge),
+                        FileExplorerTab::FindHostBridge | FileExplorerTab::FindRemote => None,
+                    };
+                    if let Some(id) = opposite {
+                        ui_result(self.app.attr(
+                            &id,
+                            Attribute::Custom(PROP_VISUAL_INDEX),
+                            AttrValue::Payload(PropPayload::Single(PropValue::Usize(index))),
+                        ));
+                    }
+                }
             }
             UiMsg::WindowResized => {
                 self.redraw = true;
