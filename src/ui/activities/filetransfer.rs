@@ -20,6 +20,7 @@ use std::time::Duration;
 
 // Includes
 use chrono::{DateTime, Local};
+use diff::DiffApplyDirection;
 use lib::browser;
 use lib::browser::{Browser, FileExplorerTab};
 use lib::pane::Pane;
@@ -170,6 +171,7 @@ enum UiMsg {
     CloseSymlinkPopup,
     CloseWatchedPathsList,
     CloseWatcherPopup,
+    DiffApplyChange(usize, DiffApplyDirection),
     Disconnect,
     FilterFiles(String),
     FuzzySearch(String),

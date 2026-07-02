@@ -373,6 +373,16 @@ impl FileTransferActivity {
             UiMsg::CloseSymlinkPopup => self.umount_symlink(),
             UiMsg::CloseWatchedPathsList => self.umount_watched_paths_list(),
             UiMsg::CloseWatcherPopup => self.umount_radio_watcher(),
+            UiMsg::DiffApplyChange(row_index, direction) => {
+                match self.action_apply_diff_change(row_index, direction) {
+                    Ok(diff) => {
+                        self.reload_host_bridge_filelist();
+                        self.reload_remote_filelist();
+                        self.mount_diff(diff);
+                    }
+                    Err(err) => self.mount_error(err),
+                }
+            }
             UiMsg::Disconnect => {
                 self.disconnect();
                 self.umount_disconnect();

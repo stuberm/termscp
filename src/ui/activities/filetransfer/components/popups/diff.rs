@@ -1,20 +1,25 @@
 use tuirealm::command::{Cmd, CmdResult, Direction, Position};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, NoUserEvent};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, NoUserEvent};
 use tuirealm::props::{AttrValue, Attribute, BorderType, Borders, Color, Props, QueryResult};
 use tuirealm::ratatui::layout::{Constraint, Direction as LayoutDirection, Layout, Rect};
-use tuirealm::ratatui::style::Style;
+use tuirealm::ratatui::style::{Modifier, Style};
 use tuirealm::ratatui::text::{Line, Span};
 use tuirealm::ratatui::widgets::{Block, Borders as TuiBorders, Paragraph, Wrap};
 use tuirealm::state::State;
 
-use crate::ui::activities::filetransfer::diff::{DiffKind, DiffRow, DiffView};
+use crate::ui::activities::filetransfer::diff::{DiffApplyDirection, DiffKind, DiffRow, DiffView};
 use crate::ui::activities::filetransfer::{Msg, UiMsg};
+
+fn first_changed_row(view: &DiffView) -> Option<usize> {
+    view.rows.iter().position(|row| row.kind != DiffKind::Equal)
+}
 
 pub struct DiffPopup {
     props: Props,
     view: DiffView,
     offset: usize,
+    selected: usize,
 }
 
 impl DiffPopup {
@@ -30,6 +35,7 @@ impl DiffPopup {
         );
         Self {
             props,
+            selected: first_changed_row(&view).unwrap_or(0),
             view,
             offset: 0,
         }
@@ -51,10 +57,86 @@ impl DiffPopup {
             .offset
             .saturating_add(amount)
             .min(self.view.rows.len().saturating_sub(1));
+        self.selected = self.selected.max(self.offset);
     }
 
     fn scroll_up(&mut self, amount: usize) {
         self.offset = self.offset.saturating_sub(amount);
+        self.selected = self.selected.min(self.offset.saturating_add(amount));
+    }
+
+    fn select_next_change(&mut self) {
+        let mut index = self.selected.saturating_add(1);
+        while index < self.view.rows.len()
+            && self.view.rows[index].kind != DiffKind::Equal
+            && self.view.rows[self.selected].kind != DiffKind::Equal
+        {
+            index += 1;
+        }
+
+        if let Some(index) = self
+            .view
+            .rows
+            .iter()
+            .enumerate()
+            .skip(index)
+            .find_map(|(index, row)| (row.kind != DiffKind::Equal).then_some(index))
+        {
+            self.selected = index;
+            self.ensure_selected_visible();
+        }
+    }
+
+    fn select_previous_change(&mut self) {
+        let mut index = self.selected;
+        while index > 0 && self.view.rows[index - 1].kind != DiffKind::Equal {
+            index -= 1;
+        }
+
+        if let Some(index) = self
+            .view
+            .rows
+            .iter()
+            .enumerate()
+            .take(index)
+            .rev()
+            .find_map(|(index, row)| (row.kind != DiffKind::Equal).then_some(index))
+        {
+            let mut hunk_start = index;
+            while hunk_start > 0 && self.view.rows[hunk_start - 1].kind != DiffKind::Equal {
+                hunk_start -= 1;
+            }
+            self.selected = hunk_start;
+            self.ensure_selected_visible();
+        }
+    }
+
+    fn ensure_selected_visible(&mut self) {
+        if self.selected < self.offset {
+            self.offset = self.selected;
+        }
+    }
+
+    fn selected_hunk_contains(&self, row_index: usize) -> bool {
+        if self
+            .view
+            .rows
+            .get(self.selected)
+            .is_none_or(|row| row.kind == DiffKind::Equal)
+        {
+            return row_index == self.selected;
+        }
+
+        let mut start = self.selected;
+        while start > 0 && self.view.rows[start - 1].kind != DiffKind::Equal {
+            start -= 1;
+        }
+        let mut end = self.selected + 1;
+        while end < self.view.rows.len() && self.view.rows[end].kind != DiffKind::Equal {
+            end += 1;
+        }
+
+        (start..end).contains(&row_index)
     }
 
     fn row_style(kind: DiffKind) -> Style {
@@ -65,7 +147,7 @@ impl DiffPopup {
         }
     }
 
-    fn line_for(row: &DiffRow, left: bool) -> Line<'static> {
+    fn line_for(row: &DiffRow, left: bool, selected: bool) -> Line<'static> {
         let (no, text, marker) = if left {
             (
                 row.left_no,
@@ -88,12 +170,19 @@ impl DiffPopup {
             )
         };
         let number = no.map_or_else(|| "     ".to_string(), |n| format!("{n:>5}"));
+        let cursor = if selected { "▶" } else { " " };
+        let style = if selected {
+            Self::row_style(row.kind).add_modifier(Modifier::REVERSED)
+        } else {
+            Self::row_style(row.kind)
+        };
         Line::from(vec![
-            Span::styled(number, Style::default().fg(Color::DarkGray)),
-            Span::raw(" "),
-            Span::styled(marker.to_string(), Self::row_style(row.kind)),
-            Span::raw(" "),
-            Span::styled(text.to_string(), Self::row_style(row.kind)),
+            Span::styled(cursor, style),
+            Span::styled(number, style.fg(Color::DarkGray)),
+            Span::styled(" ", style),
+            Span::styled(marker.to_string(), style),
+            Span::styled(" ", style),
+            Span::styled(text.to_string(), style),
         ])
     }
 
@@ -123,23 +212,27 @@ impl Component for DiffPopup {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
         let take = Self::visible_height(area);
+        if self.selected >= self.offset.saturating_add(take) {
+            self.offset = self.selected.saturating_add(1).saturating_sub(take);
+        }
         let rows = self
             .view
             .rows
             .iter()
+            .enumerate()
             .skip(self.offset)
             .take(take)
             .collect::<Vec<_>>();
         let left = rows
             .iter()
-            .map(|row| Self::line_for(row, true))
+            .map(|(index, row)| Self::line_for(row, true, self.selected_hunk_contains(*index)))
             .collect::<Vec<_>>();
         let right = rows
             .iter()
-            .map(|row| Self::line_for(row, false))
+            .map(|(index, row)| Self::line_for(row, false, self.selected_hunk_contains(*index)))
             .collect::<Vec<_>>();
         let status = format!(
-            "{}  ({}/{})  Esc/q close",
+            "{}  ({}/{})  Tab/↑↓ select  ←/→ or </> copy  Esc/q close",
             self.view.left_title,
             self.offset.saturating_add(1).min(self.view.rows.len()),
             self.view.rows.len()
@@ -185,13 +278,37 @@ impl AppComponent<Msg, NoUserEvent> for DiffPopup {
                 ..
             }) => Some(Msg::Ui(UiMsg::CloseDiffPopup)),
             Event::Keyboard(KeyEvent {
+                code: Key::Right | Key::Char('>' | '.'),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            }) => Some(Msg::Ui(UiMsg::DiffApplyChange(
+                self.selected,
+                DiffApplyDirection::LeftToRight,
+            ))),
+            Event::Keyboard(KeyEvent {
+                code: Key::Left | Key::Char('<' | ','),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            }) => Some(Msg::Ui(UiMsg::DiffApplyChange(
+                self.selected,
+                DiffApplyDirection::RightToLeft,
+            ))),
+            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
+                self.select_next_change();
+                Some(Msg::None)
+            }
+            Event::Keyboard(KeyEvent {
+                code: Key::BackTab, ..
+            }) => {
+                self.select_previous_change();
+                Some(Msg::None)
+            }
+            Event::Keyboard(KeyEvent {
                 code: Key::Down, ..
             }) => {
-                self.perform(Cmd::Move(Direction::Down));
+                self.select_next_change();
                 Some(Msg::None)
             }
             Event::Keyboard(KeyEvent { code: Key::Up, .. }) => {
-                self.perform(Cmd::Move(Direction::Up));
+                self.select_previous_change();
                 Some(Msg::None)
             }
             Event::Keyboard(KeyEvent {
