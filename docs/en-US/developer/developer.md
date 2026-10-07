@@ -6,7 +6,7 @@ documentation for termscp modules, which can instead be found on Rust Docs at
 guidelines to implement features such as file transfers and additions to the
 user interface.
 
-termscp is written in Rust (edition 2024, MSRV 1.89.0). The user interface is
+termscp is written in Rust (edition 2024, MSRV 1.98.0). The user interface is
 built with [tuirealm](https://github.com/veeso/tui-realm) v3, which runs on top
 of [crossterm](https://github.com/crossterm-rs/crossterm).
 
@@ -37,8 +37,8 @@ In addition to the 3 core modules, others have been added over time:
   storage and the bookmarks.
 - **utils**: contains the utilities used by pretty much all of the project.
 
-termscp supports the following protocols: SFTP, SCP, FTP/FTPS, Kube, S3, SMB and
-WebDAV.
+termscp supports the following protocols: SFTP, SCP, FTP/FTPS, Kube, S3, GCS,
+SMB and WebDAV.
 
 ## Activities
 
@@ -63,8 +63,8 @@ works best from different frameworks:
   more, read <https://github.com/veeso/tui-realm>.
 - **Components**: components are built around tui in order to reuse widgets. This
   is achieved through the `Component` trait, inspired by
-  [React](https://reactjs.org/). Each component has its *Properties* and can have
-  its *States*. Each component must handle input events, accept new properties,
+  [React](https://reactjs.org/). Each component has its _Properties_ and can have
+  its _States_. Each component must handle input events, accept new properties,
   and provide a method to **render** itself. This logic now lives in
   [tui-realm](https://github.com/veeso/tui-realm).
 - **Messages: an Elm-based approach**: input events are handled with an approach

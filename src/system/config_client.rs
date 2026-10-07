@@ -533,6 +533,23 @@ mod tests {
     }
 
     #[test]
+    fn should_round_trip_gcs_as_default_protocol() {
+        let tmp_dir: TempDir = TempDir::new().ok().unwrap();
+        let (cfg_path, key_path): (PathBuf, PathBuf) = get_paths(tmp_dir.path());
+        let mut client = ConfigClient::new(cfg_path.as_path(), key_path.as_path())
+            .ok()
+            .unwrap();
+
+        client.set_default_protocol(FileTransferProtocol::GoogleCloudStorage);
+
+        assert_eq!(
+            client.get_default_protocol(),
+            FileTransferProtocol::GoogleCloudStorage
+        );
+        assert_eq!(client.config.user_interface.default_protocol, "GCS");
+    }
+
+    #[test]
     fn test_system_config_show_hidden_files() {
         let tmp_dir: TempDir = TempDir::new().ok().unwrap();
         let (cfg_path, key_path): (PathBuf, PathBuf) = get_paths(tmp_dir.path());
@@ -595,7 +612,7 @@ mod tests {
         client.set_local_file_fmt(String::from("{NAME}"));
         assert_eq!(client.get_local_file_fmt().unwrap(), String::from("{NAME}"));
         // Delete
-        client.set_local_file_fmt(String::from(""));
+        client.set_local_file_fmt(String::new());
         assert_eq!(client.get_local_file_fmt(), None);
     }
 
@@ -613,7 +630,7 @@ mod tests {
             String::from("{NAME}")
         );
         // Delete
-        client.set_remote_file_fmt(String::from(""));
+        client.set_remote_file_fmt(String::new());
         assert_eq!(client.get_remote_file_fmt(), None);
     }
 

@@ -40,6 +40,9 @@ pub(super) static REMOTE_KUBE_OPT_REGEX: Lazy<Regex> =
 pub(super) static REMOTE_S3_OPT_REGEX: Lazy<Regex> =
     lazy_regex!(r"(?:(.+[^@])@)(?:([^:]+))(?::([a-zA-Z0-9][^:]+))?(?::([^:]+))?");
 
+/// Regex matches Google Cloud Storage remote options.
+pub(super) static REMOTE_GCS_OPT_REGEX: Lazy<Regex> = lazy_regex!(r"^([^:]+)(?::(/.*))?$");
+
 /// Regex matches SMB remote options on Unix platforms.
 #[cfg(smb_unix)]
 pub(super) static REMOTE_SMB_OPT_REGEX: Lazy<Regex> = lazy_regex!(
@@ -61,6 +64,15 @@ static SEMVER_REGEX: Lazy<Regex> = lazy_regex!(r"v?((0|[1-9]\d*)\.(0|[1-9]\d*)\.
  */
 static BYTESIZE_REGEX: Lazy<Regex> = lazy_regex!(r"(:?([0-9])+)( )*(:?[KMGTP])?B$");
 
+/// Parsed remote parameters together with CLI syntax metadata.
+#[derive(Debug)]
+pub(crate) struct ParsedRemote {
+    /// Parsed file transfer parameters.
+    pub(crate) file_transfer_params: FileTransferParams,
+    /// Whether the remote address explicitly provided a port.
+    pub(crate) port_explicit: bool,
+}
+
 /// Parse remote option string. Returns in case of success a RemoteOptions struct
 /// For ssh if username is not provided, current user will be used.
 /// In case of error, message is returned
@@ -68,7 +80,7 @@ static BYTESIZE_REGEX: Lazy<Regex> = lazy_regex!(r"(:?([0-9])+)( )*(:?[KMGTP])?B
 ///     SFTP => 22
 ///     FTP => 21
 /// The option string has the following syntax
-/// [protocol://][username@]{address}[:port][:path]
+/// `[protocol://][username@]{address}[:port][:path]`
 /// The only argument which is mandatory is address
 /// NOTE: possible strings
 /// - 172.26.104.1
@@ -80,20 +92,36 @@ static BYTESIZE_REGEX: Lazy<Regex> = lazy_regex!(r"(:?([0-9])+)( )*(:?[KMGTP])?B
 ///
 /// For s3:
 ///
-/// s3://<bucket-name>@<region>[:profile][:/wrkdir]
+/// `s3://<bucket-name>@<region>[:profile][:/wrkdir]`
+///
+/// For Google Cloud Storage:
+///
+/// `gcs://<bucket>[:/working/directory]`
 ///
 /// For SMB:
 ///
 /// on UNIX derived (macos, linux, ...)
 ///
-/// smb://[username@]<address>[:port]/<share>[/path]
+/// `smb://[username@]<address>[:port]/<share>[/path]`
 ///
 /// on Windows
 ///
-/// \\<address>\<share>[\path]
+/// `\\<address>\<share>[\path]`
 ///
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "The public parser API is retained while CLI callers need port metadata."
+    )
+)]
 pub fn parse_remote_opt(s: &str) -> Result<FileTransferParams, String> {
-    remote::parse_remote_opt(s)
+    parse_remote_opt_with_metadata(s).map(|parsed| parsed.file_transfer_params)
+}
+
+/// Parse a remote option while retaining metadata needed by CLI precedence rules.
+pub(crate) fn parse_remote_opt_with_metadata(s: &str) -> Result<ParsedRemote, String> {
+    remote::parse_remote_opt_with_metadata(s)
 }
 
 /// Parse semver string
@@ -346,6 +374,20 @@ mod tests {
     }
 
     #[test]
+    fn parsed_remote_should_track_whether_the_port_was_explicit() {
+        for (remote, port_explicit) in [
+            ("scp://host", false),
+            ("scp://host:/path", false),
+            ("scp://host:22", true),
+            ("scp://host:2222", true),
+        ] {
+            let parsed = remote::parse_remote_opt_with_metadata(remote).unwrap();
+
+            assert_eq!(parsed.port_explicit, port_explicit, "{remote}");
+        }
+    }
+
+    #[test]
     fn test_should_parse_webdav_opt() {
         let result =
             parse_remote_opt("https://omar:password@myserver:4445/myshare/dir/subdir").unwrap();
@@ -470,6 +512,33 @@ mod tests {
         assert_eq!(result.remote_path, Some(PathBuf::from("/foobar")));
         assert_eq!(params.bucket_name.as_str(), "omar@mybucket");
         assert_eq!(params.region.as_deref().unwrap(), "eu-central-1");
+    }
+
+    #[test]
+    fn should_parse_google_cloud_storage_address() {
+        let result = parse_remote_opt("gcs://my-bucket").unwrap();
+        let params = result.params.gcs_params().unwrap();
+
+        assert_eq!(result.protocol, FileTransferProtocol::GoogleCloudStorage);
+        assert_eq!(result.remote_path, None);
+        assert_eq!(params.bucket_name, "my-bucket");
+        assert_eq!(params.endpoint, "https://storage.googleapis.com");
+        assert_eq!(params.service_account_key, None);
+    }
+
+    #[test]
+    fn should_parse_google_cloud_storage_working_directory() {
+        let result = parse_remote_opt("gcs://my-bucket:/assets/images").unwrap();
+
+        assert_eq!(
+            result.remote_path.as_deref(),
+            Some(std::path::Path::new("/assets/images"))
+        );
+    }
+
+    #[test]
+    fn should_reject_google_cloud_storage_address_without_bucket() {
+        assert!(parse_remote_opt("gcs://:/assets").is_err());
     }
 
     #[test]

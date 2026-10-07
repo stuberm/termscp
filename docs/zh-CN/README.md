@@ -35,7 +35,7 @@
 
 ## 关于 termscp 🖥
 
-termscp 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/SFTP/FTP/Kube/S3/WebDAV。 简而言之，它是一个带有 TUI 的终端工具，可以连接到远程服务器进行文件的检索和上传，并能够与本地文件系统进行交互。 它兼容 **Linux**、**MacOS**、**FreeBSD**、**NetBSD** 和 **Windows** 操作系统。
+termscp 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/SFTP/FTP/Kube/S3/Google Cloud Storage (GCS)/WebDAV。 简而言之，它是一个带有 TUI 的终端工具，可以连接到远程服务器进行文件的检索和上传，并能够与本地文件系统进行交互。 它兼容 **Linux**、**MacOS**、**FreeBSD**、**NetBSD** 和 **Windows** 操作系统。
 
 ![Explorer](assets/images/explorer.gif)
 
@@ -43,39 +43,40 @@ termscp 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/S
 
 ## 特性 🎁
 
-- 📁  支持多种通信协议
+- 📁 支持多种通信协议
   - **SFTP**
   - **SCP**
   - **FTP** 和 **FTPS**
   - **Kube**
   - **S3**
+  - **Google Cloud Storage (GCS)**
   - **SMB**
   - **WebDAV**
-- 🖥  使用便捷的 UI 在远程和本地文件系统上浏览和操作
+- 🖥 使用便捷的 UI 在远程和本地文件系统上浏览和操作
   - 创建、删除、重命名、搜索、查看和编辑文件
-- ⭐  通过“内置书签”和“最近连接”快速连接到您喜爱的主机
-- 📝  使用您喜欢的应用程序查看和编辑文件
-- 💁  使用 SSH 密钥和用户名/密码进行 SFTP/SCP 身份验证
-- 🐧  兼容 Windows、Linux、FreeBSD、NetBSD 和 MacOS 操作系统
-- 🐚  内置终端，可在系统上执行命令。
-- 🎨  丰富的个性化设置！
+- ⭐ 通过“内置书签”和“最近连接”快速连接到您喜爱的主机
+- 📝 使用您喜欢的应用程序查看和编辑文件
+- 💁 使用 SSH 密钥和用户名/密码进行 SFTP/SCP 身份验证
+- 🐧 兼容 Windows、Linux、FreeBSD、NetBSD 和 MacOS 操作系统
+- 🐚 内置终端，可在系统上执行命令。
+- 🎨 丰富的个性化设置！
   - 主题
   - 自定义文件浏览器格式
   - 可自定义的文本编辑器
   - 可自定义的文件排序
   - 以及许多其他参数...
-- 📫  传输大文件时通过桌面通知获得提醒
-- 🔭  与远程主机文件更改保持同步
-- 🔐  将密码保存在操作系统密钥保管库中
-- 🦀  由 Rust 提供强力支持
-- 👀  开发时更注重性能
-- 🦄  频繁的精彩更新
+- 📫 传输大文件时通过桌面通知获得提醒
+- 🔭 与远程主机文件更改保持同步
+- 🔐 将密码保存在操作系统密钥保管库中
+- 🦀 由 Rust 提供强力支持
+- 👀 开发时更注重性能
+- 🦄 频繁的精彩更新
 
 ---
 
 ## 开始 🚀
 
-如果您正在考虑安装 termscp，我想对您表示感谢 💜 ！ 希望您会喜欢 termscp！  
+如果您正在考虑安装 termscp，我想对您表示感谢 💜 ！ 希望您会喜欢 termscp！\
 如果您想为此项目做出贡献，请不要忘记查看我们的[贡献指南](CONTRIBUTING.md)。
 
 如果您是 Linux、FreeBSD 或 MacOS 用户，使用以下简单的 shell 脚本即可通过单行指令在您的系统上安装 termscp：
@@ -116,6 +117,10 @@ pacman -S termscp
 
 ### 依赖 ❗
 
+官方 Linux 二进制文件和 `.deb` 包静态链接了 musl，**没有任何运行时依赖**：可在任意发行版、任意 glibc 版本上运行。
+
+以下依赖仅在从源码构建 termscp 时需要：
+
 - **Linux** 用户：
   - libdbus-1
   - pkg-config
@@ -131,10 +136,10 @@ pacman -S termscp
 
 - **Linux/FreeBSD** 用户：
   - 用 `V` **打开**文件（至少其中之一）
-    - *xdg-open*
-    - *gio*
-    - *gnome-open*
-    - *kde-open*
+    - _xdg-open_
+    - _gio_
+    - _gnome-open_
+    - _kde-open_
 - **Linux** 用户：
   - 密钥环管理器：在[用户手册](https://docs.termscp.rs/zh-CN/configuration/password-security.html#linux-密钥环)中阅读更多内容
 - **WSL** 用户

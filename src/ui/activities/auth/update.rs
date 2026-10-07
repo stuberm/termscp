@@ -6,8 +6,10 @@ use tuirealm::state::{State, StateValue};
 
 use super::{
     AuthActivity, AuthFormId, ExitReason, FormMsg, FormTab, HostBridgeProtocol, Id, InputMask, Msg,
-    UiAuthFormMsg, UiMsg,
+    UiAuthFormMsg, UiMsg, should_resolve_ssh_host_params,
 };
+use crate::filetransfer::FileTransferProtocol;
+use crate::utils::ssh::resolve_ssh_host_params;
 
 impl AuthActivity {
     pub(super) fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
@@ -24,19 +26,26 @@ impl AuthActivity {
     fn update_form(&mut self, msg: FormMsg) -> Option<Msg> {
         match msg {
             FormMsg::Connect => {
-                let Ok(remote_params) = self.collect_remote_host_params() else {
-                    // mount error
-                    self.mount_error("Invalid remote params parameters");
-                    return None;
+                self.resolve_ssh_host_params_if_needed(FormTab::Remote, false);
+                self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, false);
+                let remote_params = match self.collect_remote_host_params() {
+                    Ok(remote_params) => remote_params,
+                    Err(err) => {
+                        // mount error
+                        self.mount_error(format!("Invalid remote host parameters: {err}"));
+                        return None;
+                    }
                 };
-
-                let Ok(host_bridge_params) = self.collect_host_bridge_params() else {
-                    // mount error
-                    self.mount_error("Invalid host bridge params parameters");
-                    return None;
-                };
-
                 debug!("Remote params: {:?}", remote_params);
+
+                let host_bridge_params = match self.collect_host_bridge_params() {
+                    Ok(host_bridge_params) => host_bridge_params,
+                    Err(err) => {
+                        // mount error
+                        self.mount_error(format!("Invalid host bridge parameters: {err}"));
+                        return None;
+                    }
+                };
                 debug!("Host bridge params: {:?}", host_bridge_params);
 
                 self.save_recent();
@@ -86,6 +95,7 @@ impl AuthActivity {
                         InputMask::Generic => &Id::Remote(AuthFormId::Password),
                         InputMask::Smb => &Id::Remote(AuthFormId::Password),
                         InputMask::AwsS3 => &Id::Remote(AuthFormId::S3Bucket),
+                        InputMask::Gcs => &Id::Remote(AuthFormId::GcsBucket),
                         InputMask::Kube => &Id::Remote(AuthFormId::KubeNamespace),
                         InputMask::WebDAV => &Id::Remote(AuthFormId::Password),
                     },
@@ -94,6 +104,7 @@ impl AuthActivity {
                         InputMask::Generic => &Id::HostBridge(AuthFormId::Password),
                         InputMask::Smb => &Id::HostBridge(AuthFormId::Password),
                         InputMask::AwsS3 => &Id::HostBridge(AuthFormId::S3Bucket),
+                        InputMask::Gcs => &Id::HostBridge(AuthFormId::GcsBucket),
                         InputMask::Kube => &Id::HostBridge(AuthFormId::KubeNamespace),
                         InputMask::WebDAV => &Id::HostBridge(AuthFormId::Password),
                     },
@@ -112,6 +123,7 @@ impl AuthActivity {
                         InputMask::Generic => &Id::Remote(AuthFormId::Password),
                         InputMask::Smb => &Id::Remote(AuthFormId::Password),
                         InputMask::AwsS3 => &Id::Remote(AuthFormId::S3Bucket),
+                        InputMask::Gcs => &Id::Remote(AuthFormId::GcsBucket),
                         InputMask::Kube => &Id::Remote(AuthFormId::KubeNamespace),
                         InputMask::WebDAV => &Id::Remote(AuthFormId::Password),
                     },
@@ -120,6 +132,7 @@ impl AuthActivity {
                         InputMask::Generic => &Id::HostBridge(AuthFormId::Password),
                         InputMask::Smb => &Id::HostBridge(AuthFormId::Password),
                         InputMask::AwsS3 => &Id::HostBridge(AuthFormId::S3Bucket),
+                        InputMask::Gcs => &Id::HostBridge(AuthFormId::GcsBucket),
                         InputMask::Kube => &Id::HostBridge(AuthFormId::KubeNamespace),
                         InputMask::WebDAV => &Id::HostBridge(AuthFormId::Password),
                     },
@@ -133,24 +146,36 @@ impl AuthActivity {
                 self.host_bridge_protocol = protocol;
                 // Update port
                 let port: u16 = self.get_input_port(FormTab::HostBridge);
-                if let HostBridgeProtocol::Remote(remote_protocol) = protocol
-                    && Self::is_port_standard(port)
-                {
-                    self.mount_port(
-                        FormTab::HostBridge,
-                        Self::get_default_port_for_protocol(remote_protocol),
-                    );
+                if let HostBridgeProtocol::Remote(remote_protocol) = protocol {
+                    match remote_protocol {
+                        FileTransferProtocol::Scp | FileTransferProtocol::Sftp => {
+                            self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, true);
+                        }
+                        _ if Self::is_port_standard(port) => {
+                            self.mount_port(
+                                FormTab::HostBridge,
+                                Self::get_default_port_for_protocol(remote_protocol),
+                            );
+                        }
+                        _ => {}
+                    }
                 }
             }
             FormMsg::RemoteProtocolChanged(protocol) => {
                 self.remote_protocol = protocol;
                 // Update port
                 let port: u16 = self.get_input_port(FormTab::Remote);
-                if Self::is_port_standard(port) {
-                    self.mount_port(
-                        FormTab::Remote,
-                        Self::get_default_port_for_protocol(protocol),
-                    );
+                match protocol {
+                    FileTransferProtocol::Scp | FileTransferProtocol::Sftp => {
+                        self.resolve_ssh_host_params_if_needed(FormTab::Remote, true);
+                    }
+                    _ if Self::is_port_standard(port) => {
+                        self.mount_port(
+                            FormTab::Remote,
+                            Self::get_default_port_for_protocol(protocol),
+                        );
+                    }
+                    _ => {}
                 }
             }
             FormMsg::Quit => {
@@ -244,6 +269,7 @@ impl AuthActivity {
     fn update_host_bridge_ui(&mut self, msg: UiAuthFormMsg) {
         match msg {
             UiAuthFormMsg::AddressBlurDown => {
+                self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, false);
                 let id = if cfg!(windows) && self.host_bridge_input_mask() == InputMask::Smb {
                     Id::HostBridge(AuthFormId::SmbShare)
                 } else {
@@ -252,9 +278,11 @@ impl AuthActivity {
                 self.activate_component(id);
             }
             UiAuthFormMsg::AddressBlurUp => {
+                self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, false);
                 self.activate_component(Id::HostBridge(AuthFormId::Protocol));
             }
             UiAuthFormMsg::ChangeFormTab => {
+                self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, false);
                 self.last_form_tab = FormTab::Remote;
                 self.activate_component(Id::Remote(AuthFormId::Protocol));
             }
@@ -269,6 +297,7 @@ impl AuthActivity {
                 self.activate_component(id);
             }
             UiAuthFormMsg::ParamsFormBlur => {
+                self.resolve_ssh_host_params_if_needed(FormTab::HostBridge, false);
                 self.activate_component(Id::BookmarksList);
             }
             UiAuthFormMsg::PasswordBlurDown => {
@@ -280,6 +309,7 @@ impl AuthActivity {
                     #[cfg(win)]
                     InputMask::Smb => Id::HostBridge(AuthFormId::RemoteDirectory),
                     InputMask::AwsS3 => unreachable!("this shouldn't happen (password on s3)"),
+                    InputMask::Gcs => unreachable!("this shouldn't happen (password on gcs)"),
                     InputMask::Kube => unreachable!("this shouldn't happen (password on kube)"),
                     InputMask::WebDAV => Id::HostBridge(AuthFormId::RemoteDirectory),
                 };
@@ -294,6 +324,7 @@ impl AuthActivity {
                     InputMask::Smb => Id::HostBridge(AuthFormId::SmbShare),
                     InputMask::Localhost
                     | InputMask::AwsS3
+                    | InputMask::Gcs
                     | InputMask::Kube
                     | InputMask::WebDAV => {
                         unreachable!("this shouldn't happen (port on s3/kube/webdav)")
@@ -310,6 +341,7 @@ impl AuthActivity {
                     InputMask::Generic => Id::HostBridge(AuthFormId::Address),
                     InputMask::Smb => Id::HostBridge(AuthFormId::Address),
                     InputMask::AwsS3 => Id::HostBridge(AuthFormId::S3Bucket),
+                    InputMask::Gcs => Id::HostBridge(AuthFormId::GcsBucket),
                     InputMask::Kube => Id::HostBridge(AuthFormId::KubeNamespace),
                     InputMask::WebDAV => Id::HostBridge(AuthFormId::WebDAVUri),
                 };
@@ -326,11 +358,12 @@ impl AuthActivity {
                     InputMask::Localhost => unreachable!(),
                     InputMask::Generic => Id::HostBridge(AuthFormId::Password),
                     #[cfg(posix)]
-                    InputMask::Smb => Id::HostBridge(AuthFormId::SmbWorkgroup),
+                    InputMask::Smb => Id::HostBridge(AuthFormId::SmbDialect),
                     #[cfg(win)]
                     InputMask::Smb => Id::HostBridge(AuthFormId::Password),
                     InputMask::Kube => Id::HostBridge(AuthFormId::KubeClientKey),
                     InputMask::AwsS3 => Id::HostBridge(AuthFormId::S3NewPathStyle),
+                    InputMask::Gcs => Id::HostBridge(AuthFormId::GcsServiceAccountKey),
                     InputMask::WebDAV => Id::HostBridge(AuthFormId::Password),
                 };
                 self.activate_component(id);
@@ -389,6 +422,24 @@ impl AuthActivity {
             UiAuthFormMsg::S3NewPathStyleBlurUp => {
                 self.activate_component(Id::HostBridge(AuthFormId::S3SessionToken))
             }
+            UiAuthFormMsg::GcsBucketBlurDown => {
+                self.activate_component(Id::HostBridge(AuthFormId::GcsEndpoint))
+            }
+            UiAuthFormMsg::GcsBucketBlurUp => {
+                self.activate_component(Id::HostBridge(AuthFormId::Protocol))
+            }
+            UiAuthFormMsg::GcsEndpointBlurDown => {
+                self.activate_component(Id::HostBridge(AuthFormId::GcsServiceAccountKey))
+            }
+            UiAuthFormMsg::GcsEndpointBlurUp => {
+                self.activate_component(Id::HostBridge(AuthFormId::GcsBucket))
+            }
+            UiAuthFormMsg::GcsServiceAccountKeyBlurDown => {
+                self.activate_component(Id::HostBridge(AuthFormId::RemoteDirectory))
+            }
+            UiAuthFormMsg::GcsServiceAccountKeyBlurUp => {
+                self.activate_component(Id::HostBridge(AuthFormId::GcsEndpoint))
+            }
             UiAuthFormMsg::KubeClientCertBlurDown => {
                 self.activate_component(Id::HostBridge(AuthFormId::KubeClientKey))
             }
@@ -432,11 +483,19 @@ impl AuthActivity {
             }
             #[cfg(posix)]
             UiAuthFormMsg::SmbWorkgroupDown => {
-                self.activate_component(Id::HostBridge(AuthFormId::RemoteDirectory))
+                self.activate_component(Id::HostBridge(AuthFormId::SmbDialect))
             }
             #[cfg(posix)]
             UiAuthFormMsg::SmbWorkgroupUp => {
                 self.activate_component(Id::HostBridge(AuthFormId::Password))
+            }
+            #[cfg(posix)]
+            UiAuthFormMsg::SmbDialectBlurDown => {
+                self.activate_component(Id::HostBridge(AuthFormId::RemoteDirectory))
+            }
+            #[cfg(posix)]
+            UiAuthFormMsg::SmbDialectBlurUp => {
+                self.activate_component(Id::HostBridge(AuthFormId::SmbWorkgroup))
             }
             UiAuthFormMsg::UsernameBlurDown => {
                 self.activate_component(Id::HostBridge(AuthFormId::Password))
@@ -448,6 +507,7 @@ impl AuthActivity {
                     InputMask::Smb => Id::HostBridge(AuthFormId::SmbShare),
                     InputMask::Kube => unreachable!("this shouldn't happen (username on kube)"),
                     InputMask::AwsS3 => unreachable!("this shouldn't happen (username on s3)"),
+                    InputMask::Gcs => unreachable!("this shouldn't happen (username on gcs)"),
                     InputMask::WebDAV => Id::HostBridge(AuthFormId::WebDAVUri),
                 };
                 self.activate_component(id);
@@ -464,6 +524,7 @@ impl AuthActivity {
     fn update_remote_ui(&mut self, msg: UiAuthFormMsg) {
         match msg {
             UiAuthFormMsg::AddressBlurDown => {
+                self.resolve_ssh_host_params_if_needed(FormTab::Remote, false);
                 let id = if cfg!(windows) && self.remote_input_mask() == InputMask::Smb {
                     Id::Remote(AuthFormId::SmbShare)
                 } else {
@@ -472,9 +533,11 @@ impl AuthActivity {
                 self.activate_component(id);
             }
             UiAuthFormMsg::AddressBlurUp => {
+                self.resolve_ssh_host_params_if_needed(FormTab::Remote, false);
                 self.activate_component(Id::Remote(AuthFormId::Protocol));
             }
             UiAuthFormMsg::ChangeFormTab => {
+                self.resolve_ssh_host_params_if_needed(FormTab::Remote, false);
                 self.last_form_tab = FormTab::HostBridge;
                 self.activate_component(Id::HostBridge(AuthFormId::Protocol));
             }
@@ -485,6 +548,7 @@ impl AuthActivity {
                 self.activate_component(Id::Remote(AuthFormId::RemoteDirectory));
             }
             UiAuthFormMsg::ParamsFormBlur => {
+                self.resolve_ssh_host_params_if_needed(FormTab::Remote, false);
                 self.activate_component(Id::BookmarksList);
             }
             UiAuthFormMsg::PasswordBlurDown => {
@@ -496,6 +560,7 @@ impl AuthActivity {
                     #[cfg(win)]
                     InputMask::Smb => Id::Remote(AuthFormId::RemoteDirectory),
                     InputMask::AwsS3 => unreachable!("this shouldn't happen (password on s3)"),
+                    InputMask::Gcs => unreachable!("this shouldn't happen (password on gcs)"),
                     InputMask::Kube => unreachable!("this shouldn't happen (password on kube)"),
                     InputMask::WebDAV => Id::Remote(AuthFormId::RemoteDirectory),
                 };
@@ -510,6 +575,7 @@ impl AuthActivity {
                     InputMask::Smb => Id::Remote(AuthFormId::SmbShare),
                     InputMask::Localhost
                     | InputMask::AwsS3
+                    | InputMask::Gcs
                     | InputMask::Kube
                     | InputMask::WebDAV => {
                         unreachable!("this shouldn't happen (port on s3/kube/webdav)")
@@ -526,6 +592,7 @@ impl AuthActivity {
                     InputMask::Generic => Id::Remote(AuthFormId::Address),
                     InputMask::Smb => Id::Remote(AuthFormId::Address),
                     InputMask::AwsS3 => Id::Remote(AuthFormId::S3Bucket),
+                    InputMask::Gcs => Id::Remote(AuthFormId::GcsBucket),
                     InputMask::Kube => Id::Remote(AuthFormId::KubeNamespace),
                     InputMask::WebDAV => Id::Remote(AuthFormId::WebDAVUri),
                 };
@@ -542,11 +609,12 @@ impl AuthActivity {
                     InputMask::Localhost => unreachable!(),
                     InputMask::Generic => Id::Remote(AuthFormId::Password),
                     #[cfg(posix)]
-                    InputMask::Smb => Id::Remote(AuthFormId::SmbWorkgroup),
+                    InputMask::Smb => Id::Remote(AuthFormId::SmbDialect),
                     #[cfg(win)]
                     InputMask::Smb => Id::Remote(AuthFormId::Password),
                     InputMask::Kube => Id::Remote(AuthFormId::KubeClientKey),
                     InputMask::AwsS3 => Id::Remote(AuthFormId::S3NewPathStyle),
+                    InputMask::Gcs => Id::Remote(AuthFormId::GcsServiceAccountKey),
                     InputMask::WebDAV => Id::Remote(AuthFormId::Password),
                 };
                 self.activate_component(id);
@@ -605,6 +673,24 @@ impl AuthActivity {
             UiAuthFormMsg::S3NewPathStyleBlurUp => {
                 self.activate_component(Id::Remote(AuthFormId::S3SessionToken))
             }
+            UiAuthFormMsg::GcsBucketBlurDown => {
+                self.activate_component(Id::Remote(AuthFormId::GcsEndpoint))
+            }
+            UiAuthFormMsg::GcsBucketBlurUp => {
+                self.activate_component(Id::Remote(AuthFormId::Protocol))
+            }
+            UiAuthFormMsg::GcsEndpointBlurDown => {
+                self.activate_component(Id::Remote(AuthFormId::GcsServiceAccountKey))
+            }
+            UiAuthFormMsg::GcsEndpointBlurUp => {
+                self.activate_component(Id::Remote(AuthFormId::GcsBucket))
+            }
+            UiAuthFormMsg::GcsServiceAccountKeyBlurDown => {
+                self.activate_component(Id::Remote(AuthFormId::RemoteDirectory))
+            }
+            UiAuthFormMsg::GcsServiceAccountKeyBlurUp => {
+                self.activate_component(Id::Remote(AuthFormId::GcsEndpoint))
+            }
             UiAuthFormMsg::KubeClientCertBlurDown => {
                 self.activate_component(Id::Remote(AuthFormId::KubeClientKey))
             }
@@ -648,11 +734,19 @@ impl AuthActivity {
             }
             #[cfg(posix)]
             UiAuthFormMsg::SmbWorkgroupDown => {
-                self.activate_component(Id::Remote(AuthFormId::RemoteDirectory))
+                self.activate_component(Id::Remote(AuthFormId::SmbDialect))
             }
             #[cfg(posix)]
             UiAuthFormMsg::SmbWorkgroupUp => {
                 self.activate_component(Id::Remote(AuthFormId::Password))
+            }
+            #[cfg(posix)]
+            UiAuthFormMsg::SmbDialectBlurDown => {
+                self.activate_component(Id::Remote(AuthFormId::RemoteDirectory))
+            }
+            #[cfg(posix)]
+            UiAuthFormMsg::SmbDialectBlurUp => {
+                self.activate_component(Id::Remote(AuthFormId::SmbWorkgroup))
             }
             UiAuthFormMsg::UsernameBlurDown => {
                 self.activate_component(Id::Remote(AuthFormId::Password))
@@ -664,6 +758,7 @@ impl AuthActivity {
                     InputMask::Smb => Id::Remote(AuthFormId::SmbShare),
                     InputMask::Kube => unreachable!("this shouldn't happen (username on kube)"),
                     InputMask::AwsS3 => unreachable!("this shouldn't happen (username on s3)"),
+                    InputMask::Gcs => unreachable!("this shouldn't happen (username on gcs)"),
                     InputMask::WebDAV => Id::Remote(AuthFormId::WebDAVUri),
                 };
                 self.activate_component(id);
@@ -675,6 +770,35 @@ impl AuthActivity {
                 self.activate_component(Id::Remote(AuthFormId::Protocol))
             }
         }
+    }
+
+    fn resolve_ssh_host_params_if_needed(&mut self, form_tab: FormTab, force: bool) {
+        let protocol = match form_tab {
+            FormTab::HostBridge => match self.host_bridge_protocol {
+                HostBridgeProtocol::Localhost => return,
+                HostBridgeProtocol::Remote(protocol) => protocol,
+            },
+            FormTab::Remote => self.remote_protocol,
+        };
+        let address = self.get_input_addr(form_tab);
+        let should_resolve = should_resolve_ssh_host_params(
+            protocol,
+            self.last_mounted_address(form_tab),
+            address.as_str(),
+            force,
+        );
+        if !should_resolve {
+            return;
+        }
+
+        let params = resolve_ssh_host_params(self.context().ssh_config(), address.as_str());
+        self.mount_port(form_tab, 22);
+        self.mount_username(form_tab, "");
+        self.mount_port(form_tab, params.port);
+        if let Some(username) = params.username {
+            self.mount_username(form_tab, username.as_str());
+        }
+        self.set_last_mounted_address(form_tab, address.as_str());
     }
 
     fn activate_component(&mut self, id: Id) {

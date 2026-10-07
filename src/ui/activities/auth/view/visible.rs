@@ -159,6 +159,40 @@ impl AuthActivity {
         }
     }
 
+    pub(in crate::ui::activities::auth) fn get_host_bridge_gcs_view(&self) -> [Id; 4] {
+        match self.app.focus() {
+            Some(&Id::HostBridge(AuthFormId::LocalDirectory)) => [
+                Id::HostBridge(AuthFormId::GcsEndpoint),
+                Id::HostBridge(AuthFormId::GcsServiceAccountKey),
+                Id::HostBridge(AuthFormId::RemoteDirectory),
+                Id::HostBridge(AuthFormId::LocalDirectory),
+            ],
+            _ => [
+                Id::HostBridge(AuthFormId::GcsBucket),
+                Id::HostBridge(AuthFormId::GcsEndpoint),
+                Id::HostBridge(AuthFormId::GcsServiceAccountKey),
+                Id::HostBridge(AuthFormId::RemoteDirectory),
+            ],
+        }
+    }
+
+    pub(in crate::ui::activities::auth) fn get_remote_gcs_view(&self) -> [Id; 4] {
+        match self.app.focus() {
+            Some(&Id::Remote(AuthFormId::LocalDirectory)) => [
+                Id::Remote(AuthFormId::GcsEndpoint),
+                Id::Remote(AuthFormId::GcsServiceAccountKey),
+                Id::Remote(AuthFormId::RemoteDirectory),
+                Id::Remote(AuthFormId::LocalDirectory),
+            ],
+            _ => [
+                Id::Remote(AuthFormId::GcsBucket),
+                Id::Remote(AuthFormId::GcsEndpoint),
+                Id::Remote(AuthFormId::GcsServiceAccountKey),
+                Id::Remote(AuthFormId::RemoteDirectory),
+            ],
+        }
+    }
+
     pub(in crate::ui::activities::auth) fn get_host_bridge_kube_view(&self) -> [Id; 4] {
         match self.app.focus() {
             Some(&Id::HostBridge(AuthFormId::KubeClientCert)) => [
@@ -255,15 +289,21 @@ impl AuthActivity {
                 Id::HostBridge(AuthFormId::Password),
                 Id::HostBridge(AuthFormId::SmbWorkgroup),
             ],
-            Some(&Id::HostBridge(AuthFormId::RemoteDirectory)) => [
+            Some(&Id::HostBridge(AuthFormId::SmbDialect)) => [
                 Id::HostBridge(AuthFormId::Username),
                 Id::HostBridge(AuthFormId::Password),
                 Id::HostBridge(AuthFormId::SmbWorkgroup),
+                Id::HostBridge(AuthFormId::SmbDialect),
+            ],
+            Some(&Id::HostBridge(AuthFormId::RemoteDirectory)) => [
+                Id::HostBridge(AuthFormId::Password),
+                Id::HostBridge(AuthFormId::SmbWorkgroup),
+                Id::HostBridge(AuthFormId::SmbDialect),
                 Id::HostBridge(AuthFormId::RemoteDirectory),
             ],
             Some(&Id::HostBridge(AuthFormId::LocalDirectory)) => [
-                Id::HostBridge(AuthFormId::Password),
                 Id::HostBridge(AuthFormId::SmbWorkgroup),
+                Id::HostBridge(AuthFormId::SmbDialect),
                 Id::HostBridge(AuthFormId::RemoteDirectory),
                 Id::HostBridge(AuthFormId::LocalDirectory),
             ],
@@ -302,15 +342,21 @@ impl AuthActivity {
                 Id::Remote(AuthFormId::Password),
                 Id::Remote(AuthFormId::SmbWorkgroup),
             ],
-            Some(&Id::Remote(AuthFormId::RemoteDirectory)) => [
+            Some(&Id::Remote(AuthFormId::SmbDialect)) => [
                 Id::Remote(AuthFormId::Username),
                 Id::Remote(AuthFormId::Password),
                 Id::Remote(AuthFormId::SmbWorkgroup),
+                Id::Remote(AuthFormId::SmbDialect),
+            ],
+            Some(&Id::Remote(AuthFormId::RemoteDirectory)) => [
+                Id::Remote(AuthFormId::Password),
+                Id::Remote(AuthFormId::SmbWorkgroup),
+                Id::Remote(AuthFormId::SmbDialect),
                 Id::Remote(AuthFormId::RemoteDirectory),
             ],
             Some(&Id::Remote(AuthFormId::LocalDirectory)) => [
-                Id::Remote(AuthFormId::Password),
                 Id::Remote(AuthFormId::SmbWorkgroup),
+                Id::Remote(AuthFormId::SmbDialect),
                 Id::Remote(AuthFormId::RemoteDirectory),
                 Id::Remote(AuthFormId::LocalDirectory),
             ],

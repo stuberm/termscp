@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(posix)]
+use crate::filetransfer::params::SmbDialect;
 use crate::ui::activities::auth::STORE_KEY_RELEASE_NOTES;
 
 impl AuthActivity {
@@ -320,6 +322,7 @@ impl AuthActivity {
         form_tab: FormTab,
         address: &str,
     ) {
+        self.set_last_mounted_address(form_tab, address);
         let addr_color = self.theme().auth_address;
         let id = Self::form_tab_id(form_tab, AuthFormId::Address);
         if let Err(err) = self.app.remount(
@@ -376,6 +379,56 @@ impl AuthActivity {
                 password,
                 form_tab,
                 password_color,
+            )),
+            vec![],
+        ) {
+            error!("Failed to remount component: {err}");
+        }
+    }
+
+    pub(in crate::ui::activities::auth) fn mount_gcs_bucket(
+        &mut self,
+        form_tab: FormTab,
+        bucket: &str,
+    ) {
+        let color = self.theme().auth_address;
+        let id = Self::form_tab_id(form_tab, AuthFormId::GcsBucket);
+        if let Err(err) = self.app.remount(
+            id,
+            Box::new(components::InputGcsBucket::new(bucket, form_tab, color)),
+            vec![],
+        ) {
+            error!("Failed to remount component: {err}");
+        }
+    }
+
+    pub(in crate::ui::activities::auth) fn mount_gcs_endpoint(
+        &mut self,
+        form_tab: FormTab,
+        endpoint: &str,
+    ) {
+        let color = self.theme().auth_username;
+        let id = Self::form_tab_id(form_tab, AuthFormId::GcsEndpoint);
+        if let Err(err) = self.app.remount(
+            id,
+            Box::new(components::InputGcsEndpoint::new(endpoint, form_tab, color)),
+            vec![],
+        ) {
+            error!("Failed to remount component: {err}");
+        }
+    }
+
+    pub(in crate::ui::activities::auth) fn mount_gcs_service_account_key(
+        &mut self,
+        form_tab: FormTab,
+        path: &str,
+    ) {
+        let color = self.theme().auth_password;
+        let id = Self::form_tab_id(form_tab, AuthFormId::GcsServiceAccountKey);
+        if let Err(err) = self.app.remount(
+            id,
+            Box::new(components::InputGcsServiceAccountKey::new(
+                path, form_tab, color,
             )),
             vec![],
         ) {
@@ -648,6 +701,36 @@ impl AuthActivity {
             Box::new(components::InputSmbWorkgroup::new(
                 workgroup, form_tab, color,
             )),
+            vec![],
+        ) {
+            error!("Failed to remount component: {err}");
+        }
+    }
+
+    #[cfg(posix)]
+    pub(in crate::ui::activities::auth) fn mount_smb_dialect(
+        &mut self,
+        form_tab: FormTab,
+        dialect: SmbDialect,
+    ) {
+        let color = self.theme().auth_protocol;
+        let id = Self::form_tab_id(form_tab, AuthFormId::SmbDialect);
+        if let Err(err) = self.app.remount(
+            id,
+            Box::new(components::RadioSmbDialect::new(dialect, form_tab, color)),
+            vec![],
+        ) {
+            error!("Failed to remount component: {err}");
+        }
+    }
+
+    #[cfg(posix)]
+    pub(in crate::ui::activities::auth) fn mount_smb_dialect_warning(&mut self, form_tab: FormTab) {
+        let color = self.theme().misc_warn_dialog;
+        let id = Self::form_tab_id(form_tab, AuthFormId::SmbDialectWarning);
+        if let Err(err) = self.app.remount(
+            id,
+            Box::new(components::SmbDialectWarning::new(color)),
             vec![],
         ) {
             error!("Failed to remount component: {err}");

@@ -114,6 +114,33 @@ s3://buckethead@eu-central-1:default:/assets
 
 你的凭据是安全的：termscp 不会直接操作这些值。它们由 `s3` crate 直接使用。
 
+## Google Cloud Storage
+
+termscp 通过 Google Cloud Storage JSON API 支持 Google Cloud Storage（GCS）存储桶。
+
+认证表单字段：
+
+- 存储桶名称（必填）
+- 端点（默认为 `https://storage.googleapis.com`）
+- 可选的服务账号 JSON 路径
+
+将服务账号 JSON 路径留空即可使用应用默认凭据（ADC）。当 termscp 在 Google
+Cloud 基础设施上运行时，ADC 可以从 `GOOGLE_APPLICATION_CREDENTIALS`、本地
+gcloud ADC 凭据或 Google Cloud 元数据服务中获取凭据。
+
+提供服务账号 JSON 路径后，termscp 会在连接时读取该文件。书签只保存该路径，
+不会复制服务账号 JSON 或其中的私钥。
+
+专用的 CLI 语法如下：
+
+```txt
+gcs://<bucket>[:/working/directory]
+```
+
+CLI 连接使用 ADC 和默认端点。如果需要自定义端点或服务账号 JSON 路径，请使用
+认证表单或书签。所选 ADC 身份或服务账号必须拥有你想执行的存储操作所需的 IAM
+权限。
+
 ## SMB
 
 认证表单字段：
@@ -124,8 +151,22 @@ s3://buckethead@eu-central-1:default:/assets
 - 密码
 - 端口（仅其他系统；默认 `445`）
 - 工作组（仅其他系统）
+- SMB 版本（仅其他系统；默认 `Auto`）
 
-在 Windows 上，端口和工作组字段不会被使用。
+在 Windows 上，端口、工作组和 SMB 版本字段不会被使用：SMB 协议协商由操作系统管理。
+
+SMB 版本字段限定协商时可用的方言：
+
+| 选项 | 协商的方言         |
+| ---- | ------------------ |
+| Auto | SMB 2.0.2 至 3.1.1 |
+| SMB1 | 仅 NT1（CIFS）     |
+| SMB2 | SMB 2.0.2 至 2.1   |
+| SMB3 | SMB 3.0 至 3.1.1   |
+
+`Auto` 永远不会协商 SMB1。SMB1 已弃用且不安全：仅在无法支持更新协议的隔离旧设备上选择它。选择 SMB1 时，表单中会显示警告。
+
+书签使用 SMB 表中的 `dialect` 键保存所选项（`auto`、`smb1`、`smb2` 或 `smb3`）。在此选项出现之前保存的书签没有 `dialect` 键，其行为等同于 `Auto`。下方的地址语法不包含版本；从命令行发起的连接使用 `Auto`。
 
 Windows 地址语法：
 

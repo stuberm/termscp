@@ -1,17 +1,17 @@
 [package]
 name = "termscp"
-version = "1.1.1"
-edition = "2024"
+version = "1.2.0"
 authors = ["Christian Visintin <christian.visintin@veeso.dev>"]
-description = "termscp is a feature rich terminal file transfer and explorer with support for SCP/SFTP/FTP/Kube/S3/WebDAV"
-license = "MIT"
-repository = "https://github.com/veeso/termscp"
 categories = ["command-line-utilities"]
+edition = "2024"
 homepage = "https://termscp.rs"
 include = ["/src/**/*", "/build.rs", "/LICENSE", "/README.md", "/CHANGELOG.md"]
 keywords = ["terminal", "ftp", "scp", "sftp", "tui"]
+license = "MIT"
 readme = "README.md"
-rust-version = "1.89.0"
+repository = "https://github.com/veeso/termscp"
+rust-version = "1.98.0"
+description = "termscp is a feature rich terminal file transfer and explorer with support for SCP/SFTP/FTP/Kube/S3/GCS/SMB/WebDAV"
 
 [package.metadata.rpm]
 package = "termscp"
@@ -25,6 +25,7 @@ termscp = { path = "/usr/bin/termscp" }
 [package.metadata.deb]
 maintainer = "Christian Visintin <christian.visintin@veeso.dev>"
 copyright = "2025, Christian Visintin <christian.visintin@veeso.dev>"
+depends = ""
 extended-description-file = "docs/misc/README.deb.txt"
 
 [features]
@@ -37,15 +38,15 @@ smb-vendored = ["remotefs-smb/vendored"]
 
 [dependencies]
 aes = "0.9"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 argh = "0.1"
-base64 = "0.22"
+base64 = "0.23"
 bitflags = "2"
 bytesize = "2"
 cbc = { version = "0.2", features = ["alloc"] }
 chrono = "0.4"
 content_inspector = "0.2"
-dirs = "6"
+dirs = "7"
 edit = "0.1"
 filetime = "0.2"
 keyring-core = "1"
@@ -58,30 +59,24 @@ nucleo = "0.5"
 open = "5"
 rand = "0.10"
 regex = "1"
-remotefs = "0.3"
-remotefs-aws-s3 = "0.4"
-remotefs-kube = "0.4"
-remotefs-smb = { version = "0.3", optional = true }
-remotefs-ssh = { version = "0.8", default-features = false, features = [
-  "russh",
-] }
-remotefs-webdav = "0.2"
+remotefs = "1"
+remotefs-aws-s3 = { version = "1", features = ["tokio"] }
+remotefs-gcs = { version = "1", features = ["tokio"] }
+remotefs-kube = { version = "1", features = ["tokio"] }
+remotefs-smb = { version = "1", default-features = false, optional = true, features = ["find", "pavao"] }
+remotefs-ssh = { version = "1", default-features = false, features = ["russh"] }
+remotefs-webdav = { version = "1", features = ["tokio"] }
 rpassword = "7"
-self_update = { version = "0.42", default-features = false, features = [
-  "archive-tar",
-  "archive-zip",
-  "compression-flate2",
-  "compression-zip-deflate",
-  "rustls",
-] }
+self_update = { version = "0.42", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate", "rustls"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 shellexpand = "3"
 simplelog = "0.12"
-ssh2-config = "0.7"
+ssh2-config = "0.8"
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1", features = ["rt"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 toml = "1"
 tui-realm-stdlib = "4"
 tui-term = "0.3"
@@ -91,20 +86,14 @@ whoami = "2"
 wildmatch = "2"
 
 [target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies]
-dbus-secret-service-keyring-store = { version = "1", features = [
-  "crypto-rust",
-  "vendored",
-] }
+dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust", "vendored"] }
 
 [target."cfg(target_family = \"unix\")".dependencies]
-remotefs-ftp = { version = "0.4", features = [
-  "native-tls",
-  "native-tls-vendored",
-] }
+remotefs-ftp = { version = "1", features = ["native-tls", "native-tls-vendored"] }
 uzers = "0.12"
 
 [target."cfg(target_family = \"windows\")".dependencies]
-remotefs-ftp = { version = "0.4", features = ["native-tls"] }
+remotefs-ftp = { version = "1", features = ["native-tls"] }
 
 [target."cfg(target_os = \"macos\")".dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
@@ -114,7 +103,7 @@ windows-native-keyring-store = "1"
 
 [dev-dependencies]
 pretty_assertions = "1"
-serial_test = "3"
+serial_test = "4"
 
 [build-dependencies]
 cfg_aliases = "0.2"

@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 // Locals
-pub use self::bridge::HostBridge;
+#[doc(inline)]
+pub use self::bridge::{HostBridge, HostReader, HostWriter};
 pub use self::localhost::Localhost;
 pub use self::remote_bridged::RemoteBridged;
 
@@ -36,6 +37,8 @@ pub enum HostErrorType {
     ExecutionFailed,
     #[error("Could not delete file")]
     DeleteFailed,
+    #[error("Invalid SSH configuration: {0}")]
+    InvalidSshConfig(String),
     #[cfg(win)]
     #[error("Not implemented")]
     NotImplemented,
@@ -46,6 +49,7 @@ pub enum HostErrorType {
 /// HostError is a wrapper for the error type and the exact io error
 #[derive(Debug, Error)]
 pub struct HostError {
+    #[source]
     pub error: HostErrorType,
     ioerr: Option<std::io::Error>,
     path: Option<PathBuf>,

@@ -35,7 +35,7 @@
 
 ## About termscp 🖥
 
-Termscp is a feature rich terminal file transfer and explorer, with support for SCP/SFTP/FTP/Kube/S3/WebDAV. So basically is a terminal utility with an TUI to connect to a remote server to retrieve and upload files and to interact with the local file system. It is **Linux**, **MacOS**, **FreeBSD**, **NetBSD** and **Windows** compatible.
+Termscp is a feature rich terminal file transfer and explorer, with support for SCP/SFTP/FTP/Kube/S3/Google Cloud Storage (GCS)/WebDAV. So basically is a terminal utility with an TUI to connect to a remote server to retrieve and upload files and to interact with the local file system. It is **Linux**, **MacOS**, **FreeBSD**, **NetBSD** and **Windows** compatible.
 
 ![Explorer](assets/images/explorer.gif)
 
@@ -43,39 +43,40 @@ Termscp is a feature rich terminal file transfer and explorer, with support for 
 
 ## Features 🎁
 
-- 📁  Different communication protocols
+- 📁 Different communication protocols
   - **SFTP**
   - **SCP**
   - **FTP** and **FTPS**
   - **Kube**
   - **S3**
+  - **Google Cloud Storage (GCS)**
   - **SMB**
   - **WebDAV**
-- 🖥  Explore and operate on the remote and on the local machine file system with a handy UI
+- 🖥 Explore and operate on the remote and on the local machine file system with a handy UI
   - Create, remove, rename, search, view and edit files
-- ⭐  Connect to your favourite hosts through built-in bookmarks and recent connections
-- 📝  View and edit files with your favourite applications
-- 💁  SFTP/SCP authentication with SSH keys and username/password
-- 🐧  Compatible with Windows, Linux, FreeBSD, NetBSD and MacOS
-- 🐚  Embedded terminal for executing commands on the system.
-- 🎨  Make it yours!
+- ⭐ Connect to your favourite hosts through built-in bookmarks and recent connections
+- 📝 View and edit files with your favourite applications
+- 💁 SFTP/SCP authentication with SSH keys and username/password
+- 🐧 Compatible with Windows, Linux, FreeBSD, NetBSD and MacOS
+- 🐚 Embedded terminal for executing commands on the system.
+- 🎨 Make it yours!
   - Themes
   - Custom file explorer format
   - Customizable text editor
   - Customizable file sorting
   - and many other parameters...
-- 📫  Get notified via Desktop Notifications when a large file has been transferred
-- 🔭  Keep file changes synchronized with the remote host
-- 🔐  Save your password in your operating system key vault
-- 🦀  Rust-powered
-- 👀  Developed keeping an eye on performance
-- 🦄  Frequent awesome updates
+- 📫 Get notified via Desktop Notifications when a large file has been transferred
+- 🔭 Keep file changes synchronized with the remote host
+- 🔐 Save your password in your operating system key vault
+- 🦀 Rust-powered
+- 👀 Developed keeping an eye on performance
+- 🦄 Frequent awesome updates
 
 ---
 
 ## Get started 🚀
 
-If you're considering to install termscp I want to thank you 💜 ! I hope you will enjoy termscp!  
+If you're considering to install termscp I want to thank you 💜 ! I hope you will enjoy termscp!\
 If you want to contribute to this project, don't forget to check out our [contribute guide](CONTRIBUTING.md).
 
 If you are a Linux, a FreeBSD or a MacOS user this simple shell script will install termscp on your system with a single command:
@@ -116,6 +117,12 @@ For more information or other platforms, please visit [termscp.rs](https://terms
 
 ### Requirements ❗
 
+The official Linux binaries and `.deb` packages are statically linked against
+musl and have **no runtime requirements**: they run on any distribution and
+any glibc version.
+
+These are only required to build termscp from source:
+
 - **Linux** users:
   - libdbus-1
   - pkg-config
@@ -131,10 +138,10 @@ These requirements are not forced required to run termscp, but to enjoy all of i
 
 - **Linux/FreeBSD** users:
   - To **open** files via `V` (at least one of these)
-    - *xdg-open*
-    - *gio*
-    - *gnome-open*
-    - *kde-open*
+    - _xdg-open_
+    - _gio_
+    - _gnome-open_
+    - _kde-open_
 - **Linux** users:
   - A keyring manager: read more in the [User manual](https://docs.termscp.rs/en-US/configuration/password-security.html#linux-keyring)
 - **WSL** users

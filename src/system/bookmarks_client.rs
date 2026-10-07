@@ -379,7 +379,9 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::filetransfer::params::{AwsS3Params, GenericProtocolParams};
+    use crate::filetransfer::params::{
+        AwsS3Params, DEFAULT_GCS_ENDPOINT, GenericProtocolParams, GoogleCloudStorageParams,
+    };
     use crate::filetransfer::{FileTransferProtocol, ProtocolParams};
 
     #[test]
@@ -524,6 +526,58 @@ mod tests {
         // secrets
         assert_eq!(params.access_key, None);
         assert_eq!(params.secret_access_key, None);
+    }
+
+    #[test]
+    fn should_preserve_gcs_service_account_path_for_saved_bookmarks() {
+        for save_password in [true, false] {
+            let tmp_dir: tempfile::TempDir = TempDir::new().ok().unwrap();
+            let (cfg_path, key_path): (PathBuf, PathBuf) = get_paths(tmp_dir.path());
+            let mut client =
+                BookmarksClient::new(cfg_path.as_path(), key_path.as_path(), 16, true).unwrap();
+
+            client
+                .add_bookmark(
+                    "gcs-bucket",
+                    make_gcs_ftparams(Some("/keys/archive.json")),
+                    save_password,
+                )
+                .unwrap();
+
+            let bookmark = client.get_bookmark("gcs-bucket").unwrap();
+            let params = bookmark.params.gcs_params().unwrap();
+            assert_eq!(params.bucket_name, "archive-bucket");
+            assert_eq!(params.endpoint, DEFAULT_GCS_ENDPOINT);
+            assert_eq!(
+                params.service_account_key.as_deref(),
+                Some("/keys/archive.json")
+            );
+            assert_eq!(bookmark.password_missing(), false);
+        }
+    }
+
+    #[test]
+    fn should_make_gcs_recent_without_password() {
+        let tmp_dir: tempfile::TempDir = TempDir::new().ok().unwrap();
+        let (cfg_path, key_path): (PathBuf, PathBuf) = get_paths(tmp_dir.path());
+        let mut client =
+            BookmarksClient::new(cfg_path.as_path(), key_path.as_path(), 16, true).unwrap();
+
+        client
+            .add_recent(make_gcs_ftparams(Some("/keys/archive.json")).remote_path(Some("/backups")))
+            .unwrap();
+
+        let recent_key = client.iter_recents().next().unwrap().clone();
+        let recent = client.get_recent(&recent_key).unwrap();
+        let params = recent.params.gcs_params().unwrap();
+        assert_eq!(params.bucket_name, "archive-bucket");
+        assert_eq!(params.endpoint, DEFAULT_GCS_ENDPOINT);
+        assert_eq!(
+            params.service_account_key.as_deref(),
+            Some("/keys/archive.json")
+        );
+        assert_eq!(recent.password_missing(), false);
+        assert_eq!(recent.remote_path.as_deref(), Some(Path::new("/backups")));
     }
 
     #[test]
@@ -767,7 +821,7 @@ mod tests {
         // Limit is 2
         assert_eq!(client.iter_recents().count(), 2);
         // Check that 192.168.1.1 has been removed
-        let key: String = client.iter_recents().next().unwrap().to_string();
+        let key: String = client.iter_recents().next().unwrap().clone();
         assert!(matches!(
             client
                 .hosts
@@ -781,7 +835,7 @@ mod tests {
                 .as_str(),
             "192.168.1.2" | "192.168.1.3"
         ));
-        let key: String = client.iter_recents().nth(1).unwrap().to_string();
+        let key: String = client.iter_recents().nth(1).unwrap().clone();
         assert!(matches!(
             client
                 .hosts
@@ -932,13 +986,23 @@ mod tests {
         )
     }
 
+    fn make_gcs_ftparams(service_account_key: Option<&str>) -> FileTransferParams {
+        FileTransferParams::new(
+            FileTransferProtocol::GoogleCloudStorage,
+            ProtocolParams::GoogleCloudStorage(
+                GoogleCloudStorageParams::new("archive-bucket")
+                    .service_account_key(service_account_key),
+            ),
+        )
+    }
+
     fn ftparams_to_tup(
         params: FileTransferParams,
     ) -> (String, u16, FileTransferProtocol, String, Option<String>) {
         let protocol = params.protocol;
         let p = params.params.generic_params().unwrap();
         (
-            p.address.to_string(),
+            p.address.clone(),
             p.port,
             protocol,
             p.username.as_ref().cloned().unwrap_or_default(),
