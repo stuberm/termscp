@@ -1,6 +1,6 @@
 //! ## Logging
 //!
-//! `logging` is the module which initializes the logging system for termscp
+//! `logging` is the module which initializes the logging system for sidemirror
 
 pub use simplelog::LevelFilter as LogLevel;
 use simplelog::{ConfigBuilder, WriteLogger};
@@ -27,7 +27,7 @@ pub fn init(level: LogLevel) -> Result<(), String> {
     // Prepare log config
     let config = ConfigBuilder::new()
         .set_time_format_rfc3339()
-        .add_filter_allow_str("termscp")
+        .add_filter_allow_str("sidemirror")
         .add_filter_allow_str("remotefs")
         .add_filter_allow_str("kube")
         .add_filter_allow_str("suppaftp")

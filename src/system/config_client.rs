@@ -18,7 +18,7 @@ use crate::filetransfer::FileTransferProtocol;
 // Types
 pub type SshHost = (String, String, PathBuf); // 0: host, 1: username, 2: RSA key path
 
-/// ConfigClient provides a high level API to communicate with the termscp configuration
+/// ConfigClient provides a high level API to communicate with the sidemirror configuration
 pub struct ConfigClient {
     config: UserConfig,   // Configuration loaded
     config_path: PathBuf, // Configuration TOML Path

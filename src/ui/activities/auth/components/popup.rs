@@ -143,7 +143,7 @@ impl WindowSizeError {
                 )
                 .foreground(color)
                 .text(Text::from_iter([SpanStatic::from(
-                    "termscp requires at least 24 lines of height to run",
+                    "sidemirror requires at least 24 lines of height to run",
                 )]))
                 .wrap_trim(true),
         }
@@ -177,7 +177,7 @@ impl QuitPopup {
                         .color(color)
                         .modifiers(BorderType::Rounded),
                 )
-                .title(Title::from("Quit termscp?").alignment(HorizontalAlignment::Center))
+                .title(Title::from("Quit sidemirror?").alignment(HorizontalAlignment::Center))
                 .rewind(true)
                 .choices(["Yes", "No"]),
         }
@@ -389,7 +389,7 @@ impl Keybindings {
                 .rows(
                     TableBuilder::default()
                         .add_col(SpanStatic::raw("<ESC>").bold().fg(color))
-                        .add_col(SpanStatic::from("           Quit termscp"))
+                        .add_col(SpanStatic::from("           Quit sidemirror"))
                         .add_row()
                         .add_col(SpanStatic::raw("<TAB>").bold().fg(color))
                         .add_col(SpanStatic::from(

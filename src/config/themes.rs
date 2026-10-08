@@ -11,7 +11,7 @@ use tuirealm::ratatui::style::Color;
 use crate::utils::fmt::fmt_color;
 use crate::utils::parser::parse_color;
 
-/// Theme contains all the colors lookup table for termscp
+/// Theme contains all the colors lookup table for sidemirror
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Theme {
     // -- auth

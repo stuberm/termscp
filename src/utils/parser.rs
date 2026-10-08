@@ -627,7 +627,7 @@ mod tests {
     #[test]
     fn test_utils_parse_semver() {
         assert_eq!(
-            parse_semver("termscp-0.3.2").unwrap(),
+            parse_semver("sidemirror-0.3.2").unwrap(),
             String::from("0.3.2")
         );
         assert_eq!(parse_semver("v0.4.1").unwrap(), String::from("0.4.1"),);

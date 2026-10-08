@@ -1,5 +1,5 @@
 [package]
-name = "termscp"
+name = "sidemirror"
 version = "1.2.0"
 authors = ["Christian Visintin <christian.visintin@veeso.dev>"]
 categories = ["command-line-utilities"]
@@ -11,16 +11,16 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/veeso/termscp"
 rust-version = "1.98.0"
-description = "termscp is a feature rich terminal file transfer and explorer with support for SCP/SFTP/FTP/Kube/S3/GCS/SMB/WebDAV"
+description = "A terminal folder and file comparison app based on termscp"
 
 [package.metadata.rpm]
-package = "termscp"
+package = "sidemirror"
 
 [package.metadata.rpm.cargo]
 buildflags = ["--release"]
 
 [package.metadata.rpm.targets]
-termscp = { path = "/usr/bin/termscp" }
+sidemirror = { path = "/usr/bin/sidemirror" }
 
 [package.metadata.deb]
 maintainer = "Christian Visintin <christian.visintin@veeso.dev>"
@@ -109,7 +109,7 @@ serial_test = "4"
 cfg_aliases = "0.2"
 
 [[bin]]
-name = "termscp"
+name = "sidemirror"
 path = "src/main.rs"
 
 [lints.rust]

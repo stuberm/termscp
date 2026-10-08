@@ -12,7 +12,7 @@ pub use host_bridge_builder::HostBridgeBuilder;
 pub use params::{FileTransferParams, HostBridgeParams, ProtocolParams};
 pub use remotefs_builder::RemoteFsBuilder;
 
-/// This enum defines the different transfer protocol available in termscp
+/// This enum defines the different transfer protocol available in sidemirror
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum FileTransferProtocol {

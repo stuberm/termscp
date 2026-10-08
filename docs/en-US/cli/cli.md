@@ -1,21 +1,21 @@
 # Command-line usage
 
-termscp can be started with the following invocation forms:
+sidemirror can be started with the following invocation forms:
 
 ```sh
-termscp [options]... [protocol://user@address:port:wrkdir] [protocol://user@address:port:wrkdir] [local-wrkdir]
+sidemirror [options]... [protocol://user@address:port:wrkdir] [protocol://user@address:port:wrkdir] [local-wrkdir]
 ```
 
 OR
 
 ```sh
-termscp [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
+sidemirror [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 ```
 
 AND any combination of the two.
 
-If no extra arguments are provided, termscp shows the authentication form. If an
-address argument or a bookmark name is provided, termscp skips the form and
+If no extra arguments are provided, sidemirror shows the authentication form. If an
+address argument or a bookmark name is provided, sidemirror skips the form and
 connects directly to the remote server. When an address or bookmark is given,
 you may also provide the starting working directory for the local host as the
 last positional argument.
@@ -39,12 +39,12 @@ provide credentials.
 
 ## Subcommands
 
-termscp exposes the following subcommands.
+sidemirror exposes the following subcommands.
 
 ### Import a theme
 
 ```sh
-termscp theme <theme-file>
+sidemirror theme <theme-file>
 ```
 
 Import the theme defined in `<theme-file>`.
@@ -52,25 +52,25 @@ Import the theme defined in `<theme-file>`.
 ### Install the latest version
 
 ```sh
-termscp update
+sidemirror update
 ```
 
-Download and install the latest available version of termscp.
+Automatic updates are disabled in ordinary source builds. Update your checkout and rebuild instead. This command is available only when a fork release repository is explicitly configured at compile time using `SIDEMIRROR_UPDATE_REPOSITORY=owner/repo`; it never downloads upstream termscp releases by default.
 
 ### Import ssh hosts
 
 ```sh
-termscp import-ssh-hosts [ssh-config-file]
+sidemirror import-ssh-hosts [ssh-config-file]
 ```
 
 Import all the hosts from the specified ssh config file as bookmarks in
-termscp. If `[ssh-config-file]` is not provided, the default location
-`~/.ssh/config` is used. Identity files are imported as ssh keys in termscp too.
+sidemirror. If `[ssh-config-file]` is not provided, the default location
+`~/.ssh/config` is used. Identity files are imported as ssh keys in sidemirror too.
 
 ### Open configuration
 
 ```sh
-termscp config
+sidemirror config
 ```
 
-Start termscp directly in the configuration (setup) screen.
+Start sidemirror directly in the configuration (setup) screen.

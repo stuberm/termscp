@@ -1,4 +1,4 @@
-//! ## termscp
+//! ## sidemirror
 //!
 //! Binary entry point for argument parsing, logging setup, and activity
 //! manager startup.
@@ -31,8 +31,8 @@ use self::cli::{Args, ArgsSubcommands, RemoteArgs, RunOpts, Task};
 use self::system::logging::{self, LogLevel};
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
-const TERMSCP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const TERMSCP_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const SIDEMIRROR_VERSION: &str = env!("CARGO_PKG_VERSION");
+const SIDEMIRROR_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 type MainResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -50,7 +50,7 @@ fn main() -> MainResult<()> {
     if let Err(err) = logging::init(run_opts.log_level) {
         eprintln!("Failed to initialize logging: {err}");
     }
-    info!("{APP_NAME} v{TERMSCP_VERSION} - Developed by {TERMSCP_AUTHORS}");
+    info!("{APP_NAME} v{SIDEMIRROR_VERSION} - Developed by {SIDEMIRROR_AUTHORS}");
     // Run
     info!("Starting activity manager...");
     run(run_opts)
@@ -125,7 +125,7 @@ fn run(run_opts: RunOpts) -> MainResult<()> {
 }
 
 fn print_version() -> MainResult<()> {
-    println!("{APP_NAME} v{TERMSCP_VERSION} - Developed by {TERMSCP_AUTHORS}");
+    println!("{APP_NAME} v{SIDEMIRROR_VERSION} - Developed by {SIDEMIRROR_AUTHORS}");
 
     Ok(())
 }

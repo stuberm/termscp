@@ -1,14 +1,14 @@
 # Bookmarks and recent hosts
 
-termscp lets you save your favourite hosts as bookmarks, which can then be loaded quickly from the main layout. termscp also keeps the last 16 hosts you connected to. Both features let you reload all the parameters required to connect to a remote simply by selecting an entry in the tab under the authentication form.
+sidemirror lets you save your favourite hosts as bookmarks, which can then be loaded quickly from the main layout. sidemirror also keeps the last 16 hosts you connected to. Both features let you reload all the parameters required to connect to a remote simply by selecting an entry in the tab under the authentication form.
 
 ## Where bookmarks are stored
 
 Bookmarks are saved, when possible, in the configuration directory:
 
-- `$HOME/.config/termscp/` on Linux/BSD
-- `$HOME/.config/termscp/` on macOS
-- `%USERPROFILE%\.termscp\` on Windows
+- `$HOME/.config/sidemirror/` on Linux/BSD
+- `$HOME/.config/sidemirror/` on macOS
+- `%USERPROFILE%\.sidemirror\` on Windows
 
 ## Saving passwords
 

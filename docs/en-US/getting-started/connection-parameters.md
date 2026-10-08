@@ -55,7 +55,7 @@ kube://[namespace][@<cluster_url>][$</path>]
 
 ## S3
 
-termscp supports both AWS S3 and other S3-compatible endpoints.
+sidemirror supports both AWS S3 and other S3-compatible endpoints.
 
 Authentication-form fields:
 
@@ -125,12 +125,12 @@ ways to do this.
    - `AWS_SECURITY_TOKEN`: security token
    - `AWS_SESSION_TOKEN`: session token
 
-Your credentials are safe: termscp does not manipulate these values directly.
+Your credentials are safe: sidemirror does not manipulate these values directly.
 They are consumed directly by the `s3` crate.
 
 ## Google Cloud Storage
 
-termscp supports Google Cloud Storage (GCS) buckets through the Google Cloud
+sidemirror supports Google Cloud Storage (GCS) buckets through the Google Cloud
 Storage JSON API.
 
 Authentication-form fields:
@@ -142,9 +142,9 @@ Authentication-form fields:
 Leave the service-account JSON path empty to use Application Default
 Credentials (ADC). ADC can obtain credentials from
 `GOOGLE_APPLICATION_CREDENTIALS`, local gcloud ADC credentials, or the Google
-Cloud metadata service when termscp runs on Google Cloud infrastructure.
+Cloud metadata service when sidemirror runs on Google Cloud infrastructure.
 
-When a service-account JSON path is supplied, termscp reads that file when it
+When a service-account JSON path is supplied, sidemirror reads that file when it
 connects. Bookmarks store only the path and never copy the service-account JSON
 or its private key.
 

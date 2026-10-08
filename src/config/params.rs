@@ -1,6 +1,6 @@
 //! ## Config
 //!
-//! `config` is the module which provides access to termscp configuration
+//! `config` is the module which provides access to sidemirror configuration
 
 // Locals
 use std::collections::HashMap;
@@ -15,7 +15,7 @@ pub const DEFAULT_NOTIFICATION_TRANSFER_THRESHOLD: u64 = 536870912; // 512MB
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 /// UserConfig contains all the configurations for the user,
-/// supported by termscp
+/// supported by sidemirror
 pub struct UserConfig {
     pub user_interface: UserInterfaceConfig,
     pub remote: RemoteConfig,

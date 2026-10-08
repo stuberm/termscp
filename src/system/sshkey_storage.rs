@@ -13,7 +13,7 @@ use ssh2_config::SshConfig;
 use super::config_client::ConfigClient;
 use crate::utils::ssh as ssh_utils;
 
-/// Resolves SSH identity files from termscp config, SSH config, and standard
+/// Resolves SSH identity files from sidemirror config, SSH config, and standard
 /// OpenSSH default locations.
 #[derive(Default)]
 pub struct SshKeyStorage {
@@ -37,8 +37,8 @@ impl SshKeyStorage {
         self.hosts.insert(key, p);
     }
 
-    /// Resolve host via termscp ssh keys storage
-    fn resolve_host_in_termscp_storage(&self, host: &str, username: &str) -> Option<&Path> {
+    /// Resolve host via sidemirror ssh keys storage
+    fn resolve_host_in_sidemirror_storage(&self, host: &str, username: &str) -> Option<&Path> {
         let key: String = Self::make_mapkey(host, username);
         self.hosts.get(&key).map(PathBuf::as_path)
     }
@@ -73,8 +73,8 @@ impl SshKeyStorage {
 
 impl SshKeyStorageTrait for SshKeyStorage {
     fn resolve(&self, host: &str, username: &str) -> Option<PathBuf> {
-        // search in termscp keys
-        if let Some(path) = self.resolve_host_in_termscp_storage(host, username) {
+        // search in sidemirror keys
+        if let Some(path) = self.resolve_host_in_sidemirror_storage(host, username) {
             return Some(path.to_path_buf());
         }
         debug!(
@@ -217,7 +217,7 @@ Host test
     }
 
     #[test]
-    fn should_prefer_termscp_key_over_ssh_config() {
+    fn should_prefer_sidemirror_key_over_ssh_config() {
         let rsa_key = test_helpers::create_sample_file_with_content(
             "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDErJhQxEI0+VvhlXVUyh+vMCm7aXfCA/g633AG8ezD/5EylwchtAr2JCoBWnxn4zV8nI9dMqOgm0jO4IsXpKOjQojv+0VOH7I+cDlBg0tk4hFlvyyS6YviDAfDDln3jYUM+5QNDfQLaZlH2WvcJ3mkDxLVlI9MBX1BAeSmChLxwAvxALp2ncImNQLzDO9eHcig3dtMrEKkzXQowRW5Y7eUzg2+vvVq4H2DOjWwUndvB5sJkhEfTUVE7ID8ZdGJo60kUb/02dZYj+IbkAnMCsqktk0cg/4XFX82hEfRYFeb1arkysFisPU1DOb6QielL/axeTebVplaouYcXY0pFdJt root@8c50fd4c345a",
         );

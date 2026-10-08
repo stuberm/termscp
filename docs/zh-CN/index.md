@@ -1,8 +1,8 @@
-# termscp
+# sidemirror
 
-![termscp explorer](https://github.com/veeso/termscp/blob/main/assets/images/explorer.gif?raw=true)
+![sidemirror explorer](https://github.com/veeso/termscp/blob/main/assets/images/explorer.gif?raw=true)
 
-termscp 是一款功能丰富、带有 TUI（终端用户界面）的终端文件传输客户端与浏览器。它让你能够连接到远程服务器以上传和下载文件，同时还能与本地文件系统进行交互。termscp 可运行于 Linux、macOS、FreeBSD、NetBSD 和 Windows。
+sidemirror 是一款功能丰富、带有 TUI（终端用户界面）的终端文件传输客户端与浏览器。它让你能够连接到远程服务器以上传和下载文件，同时还能与本地文件系统进行交互。sidemirror 可运行于 Linux、macOS、FreeBSD、NetBSD 和 Windows。
 
 ## 功能特性
 

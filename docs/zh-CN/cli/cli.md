@@ -1,20 +1,20 @@
 # 命令行用法
 
-termscp 可以通过以下调用形式启动：
+sidemirror 可以通过以下调用形式启动：
 
 ```sh
-termscp [options]... [protocol://user@address:port:wrkdir] [protocol://user@address:port:wrkdir] [local-wrkdir]
+sidemirror [options]... [protocol://user@address:port:wrkdir] [protocol://user@address:port:wrkdir] [local-wrkdir]
 ```
 
 或
 
 ```sh
-termscp [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
+sidemirror [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 ```
 
 以及两者的任意组合。
 
-如果未提供额外参数，termscp 会显示身份验证表单。如果提供了地址参数或书签名称，termscp 会跳过该表单并直接连接到远程服务器。当提供地址或书签时，你还可以将本地主机的起始工作目录作为最后一个位置参数提供。
+如果未提供额外参数，sidemirror 会显示身份验证表单。如果提供了地址参数或书签名称，sidemirror 会跳过该表单并直接连接到远程服务器。当提供地址或书签时，你还可以将本地主机的起始工作目录作为最后一个位置参数提供。
 
 ## 选项
 
@@ -33,12 +33,12 @@ termscp [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 
 ## 子命令
 
-termscp 提供以下子命令。
+sidemirror 提供以下子命令。
 
 ### 导入主题
 
 ```sh
-termscp theme <theme-file>
+sidemirror theme <theme-file>
 ```
 
 导入在 `<theme-file>` 中定义的主题。
@@ -46,23 +46,23 @@ termscp theme <theme-file>
 ### 安装最新版本
 
 ```sh
-termscp update
+sidemirror update
 ```
 
-下载并安装 termscp 的最新可用版本。
+普通源码构建默认禁用自动更新，请更新仓库后重新编译。只有编译时通过 `SIDEMIRROR_UPDATE_REPOSITORY=owner/repo` 明确配置了分支发布仓库，此命令才能使用；默认不会下载上游 termscp 的发布版本。
 
 ### 导入 ssh 主机
 
 ```sh
-termscp import-ssh-hosts [ssh-config-file]
+sidemirror import-ssh-hosts [ssh-config-file]
 ```
 
-将指定 ssh 配置文件中的所有主机作为书签导入到 termscp 中。如果未提供 `[ssh-config-file]`，则使用默认位置 `~/.ssh/config`。身份文件也会作为 ssh 密钥导入到 termscp 中。
+将指定 ssh 配置文件中的所有主机作为书签导入到 sidemirror 中。如果未提供 `[ssh-config-file]`，则使用默认位置 `~/.ssh/config`。身份文件也会作为 ssh 密钥导入到 sidemirror 中。
 
 ### 打开配置
 
 ```sh
-termscp config
+sidemirror config
 ```
 
-直接在配置（setup）界面中启动 termscp。
+直接在配置（setup）界面中启动 sidemirror。

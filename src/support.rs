@@ -1,6 +1,6 @@
 //! ## Support
 //!
-//! this module exposes some extra run modes for termscp, meant to be used for "support", such as installing themes
+//! this module exposes some extra run modes for sidemirror, meant to be used for "support", such as installing themes
 
 mod import_ssh_hosts;
 
@@ -15,7 +15,7 @@ use crate::system::environment;
 use crate::system::notifications::Notification;
 use crate::system::theme_provider::ThemeProvider;
 
-/// Import theme at provided path into termscp
+/// Import theme at provided path into sidemirror
 pub fn import_theme(p: &Path) -> Result<(), String> {
     if !p.exists() {
         return Err(String::from(
@@ -34,14 +34,14 @@ pub fn import_theme(p: &Path) -> Result<(), String> {
         .map_err(|e| format!("Could not import theme: {e}"))
 }
 
-/// Install latest version of termscp if an update is available
+/// Install latest version of sidemirror if an update is available
 pub fn install_update() -> Result<String, String> {
     match Update::default()
         .show_progress(true)
         .ask_confirm(true)
         .upgrade()
     {
-        Ok(UpdateStatus::AlreadyUptodate) => Ok("termscp is already up to date".to_string()),
+        Ok(UpdateStatus::AlreadyUptodate) => Ok("sidemirror is already up to date".to_string()),
         Ok(UpdateStatus::UpdateInstalled(v)) => {
             if get_config_client()
                 .map(|x| x.get_notifications())
@@ -49,7 +49,7 @@ pub fn install_update() -> Result<String, String> {
             {
                 Notification::update_installed(v.as_str());
             }
-            Ok(format!("termscp has been updated to version {v}"))
+            Ok(format!("sidemirror has been updated to version {v}"))
         }
         Err(err) => {
             if get_config_client()

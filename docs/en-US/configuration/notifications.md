@@ -1,6 +1,6 @@
 # Notifications
 
-termscp sends desktop notifications for the following events:
+sidemirror sends desktop notifications for the following events:
 
 - **Transfer completed**: sent once a transfer has been successfully completed.
   Displayed only if the total transfer size is at least the configured
@@ -8,8 +8,8 @@ termscp sends desktop notifications for the following events:
 - **Transfer failed**: sent once a transfer has failed due to an error.
   Displayed only if the total transfer size is at least the configured
   `Notifications: minimum transfer size`.
-- **Update available**: sent whenever a new version of termscp is available.
-- **Update installed**: sent whenever a new version of termscp has been
+- **Update available**: sent whenever a new version of sidemirror is available.
+- **Update installed**: sent whenever a new version of sidemirror has been
   installed.
 - **Update failed**: sent whenever the installation of an update fails.
 

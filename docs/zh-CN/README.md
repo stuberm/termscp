@@ -1,7 +1,7 @@
-# termscp
+# sidemirror
 
 <p align="center">
-  <img src="/assets/images/termscp.svg" alt="termscp logo" width="256" height="256" />
+  <img src="/assets/images/termscp.svg" alt="sidemirror logo" width="256" height="256" />
 </p>
 
 <p align="center">~ 功能丰富的终端文件传输工具 ~</p>
@@ -33,9 +33,9 @@
 
 ---
 
-## 关于 termscp 🖥
+## 关于 sidemirror 🖥
 
-termscp 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/SFTP/FTP/Kube/S3/Google Cloud Storage (GCS)/WebDAV。 简而言之，它是一个带有 TUI 的终端工具，可以连接到远程服务器进行文件的检索和上传，并能够与本地文件系统进行交互。 它兼容 **Linux**、**MacOS**、**FreeBSD**、**NetBSD** 和 **Windows** 操作系统。
+sidemirror 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/SFTP/FTP/Kube/S3/Google Cloud Storage (GCS)/WebDAV。 简而言之，它是一个带有 TUI 的终端工具，可以连接到远程服务器进行文件的检索和上传，并能够与本地文件系统进行交互。 它兼容 **Linux**、**MacOS**、**FreeBSD**、**NetBSD** 和 **Windows** 操作系统。
 
 ![Explorer](assets/images/explorer.gif)
 
@@ -76,10 +76,10 @@ termscp 是一个功能丰富的终端文件浏览和传输工具，支持 SCP/S
 
 ## 开始 🚀
 
-如果您正在考虑安装 termscp，我想对您表示感谢 💜 ！ 希望您会喜欢 termscp！\
+如果您正在考虑安装 sidemirror，我想对您表示感谢 💜 ！ 希望您会喜欢 sidemirror！\
 如果您想为此项目做出贡献，请不要忘记查看我们的[贡献指南](CONTRIBUTING.md)。
 
-如果您是 Linux、FreeBSD 或 MacOS 用户，使用以下简单的 shell 脚本即可通过单行指令在您的系统上安装 termscp：
+如果您是 Linux、FreeBSD 或 MacOS 用户，使用以下简单的 shell 脚本即可通过单行指令在您的系统上安装 sidemirror：
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSLf https://termscp.rs/install.sh | sh
@@ -87,7 +87,7 @@ curl --proto '=https' --tlsv1.2 -sSLf https://termscp.rs/install.sh | sh
 
 > ❗ MacOS 安装需要 [Homebrew](https://brew.sh/)，否则将会安装 Rust 编译器
 
-如果您是 Windows 用户，则可以在 PowerShell 中通过单行指令安装 termscp：
+如果您是 Windows 用户，则可以在 PowerShell 中通过单行指令安装 sidemirror：
 
 ```ps
 irm https://termscp.rs/install.ps1 | iex
@@ -96,30 +96,30 @@ irm https://termscp.rs/install.ps1 | iex
 或者，使用 [Chocolatey](https://chocolatey.org/)：
 
 ```ps
-choco install termscp
+choco install sidemirror
 ```
 
-NetBSD 用户可以从官方仓库安装 termscp。
+NetBSD 用户可以从官方仓库安装 sidemirror。
 
 ```sh
-pkgin install termscp
+pkgin install sidemirror
 ```
 
-Arch Linux 用户可以从官方仓库安装 termscp。
+Arch Linux 用户可以从官方仓库安装 sidemirror。
 
 ```sh
-pacman -S termscp
+pacman -S sidemirror
 ```
 
-如需更多信息或其他平台支持，请访问 [termscp.rs](https://termscp.rs/install) 查看所有安装方法。
+如需更多信息或其他平台支持，请访问 [sidemirror.rs](https://termscp.rs/install) 查看所有安装方法。
 
-⚠️ 如果您想了解如何更新 termscp，只需从 CLI 运行 termscp： `(sudo) termscp update` ⚠️
+⚠️ 如果您想了解如何更新 sidemirror，只需从 CLI 运行 sidemirror： `(sudo) sidemirror update` ⚠️
 
 ### 依赖 ❗
 
 官方 Linux 二进制文件和 `.deb` 包静态链接了 musl，**没有任何运行时依赖**：可在任意发行版、任意 glibc 版本上运行。
 
-以下依赖仅在从源码构建 termscp 时需要：
+以下依赖仅在从源码构建 sidemirror 时需要：
 
 - **Linux** 用户：
   - libdbus-1
@@ -132,7 +132,7 @@ pacman -S termscp
 
 ### 可选依赖 ✔️
 
-这些依赖并非运行 termscp 的强制要求，但有助于享受其全部功能
+这些依赖并非运行 sidemirror 的强制要求，但有助于享受其全部功能
 
 - **Linux/FreeBSD** 用户：
   - 用 `V` **打开**文件（至少其中之一）
@@ -150,7 +150,7 @@ pacman -S termscp
 
 ## 支持开发者 ☕
 
-如果您喜欢 termscp 并且感激我所做的工作，请考虑给予一点捐赠 🥳
+如果您喜欢 sidemirror 并且感激我所做的工作，请考虑给予一点捐赠 🥳
 
 您可以通过以下平台之一进行捐赠：
 
@@ -161,7 +161,7 @@ pacman -S termscp
 
 ## 用户手册 📚
 
-用户手册可以在 [termscp 文档网站](https://docs.termscp.rs)上找到。
+用户手册可以在 [sidemirror 文档网站](https://docs.termscp.rs)上找到。
 
 ---
 
@@ -174,7 +174,7 @@ pacman -S termscp
 ## 贡献和问题 🤝🏻
 
 欢迎贡献、bug 报告、新功能和问题！ 😉
-如果您有任何问题或困惑，或者想建议新功能，或者只是想改进 termscp，请随时打开 issue 或 PR。
+如果您有任何问题或困惑，或者想建议新功能，或者只是想改进 sidemirror，请随时打开 issue 或 PR。
 
 一个**值得赞赏**的贡献是将用户手册和 README 翻译成**其他语言**
 
@@ -184,13 +184,13 @@ pacman -S termscp
 
 ## 更新日志 ⏳
 
-查看 termscp 的更新日志[点此](CHANGELOG.md)
+查看 sidemirror 的更新日志[点此](CHANGELOG.md)
 
 ---
 
 ## 支持 💪
 
-termscp 由这些很棒的项目提供支持：
+sidemirror 由这些很棒的项目提供支持：
 
 - [bytesize](https://github.com/hyunsik/bytesize)
 - [crossterm](https://github.com/crossterm-rs/crossterm)
@@ -211,7 +211,7 @@ termscp 由这些很棒的项目提供支持：
 
 ## 演示 🎬
 
-> termscp 首页
+> sidemirror 首页
 
 ![Auth](assets/images/auth.gif)
 
@@ -231,6 +231,6 @@ termscp 由这些很棒的项目提供支持：
 
 ## 许可协议 📃
 
-termscp 使用 MIT 许可证授权。
+sidemirror 使用 MIT 许可证授权。
 
 您可以阅读完整的[许可证](LICENSE)

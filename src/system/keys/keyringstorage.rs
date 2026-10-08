@@ -119,7 +119,7 @@ mod tests {
         let username = whoami::username().expect("no username");
         let storage = KeyringStorage::new(username.as_str());
         assert!(storage.is_supported());
-        let app_name: &str = "termscp-test2";
+        let app_name: &str = "sidemirror-test2";
         let secret: &str = "Th15-15/My-Супер-Секрет";
         let kring: Keyring = Keyring::new(app_name, username.as_str()).unwrap();
         let _ = kring.delete_credential();

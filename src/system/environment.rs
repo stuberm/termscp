@@ -6,51 +6,51 @@
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-/// termscp's configuration directory, including the `termscp` project subdirectory.
+/// sidemirror's configuration directory, including the `sidemirror` project subdirectory.
 ///
 /// See [`config_dir`] for the per-platform locations.
 #[cfg(not(test))]
 static CONF_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(config_dir);
 #[cfg(test)]
 static CONF_DIR: LazyLock<Option<PathBuf>> =
-    LazyLock::new(|| Some(std::env::temp_dir().join("termscp")));
+    LazyLock::new(|| Some(std::env::temp_dir().join("sidemirror")));
 
-/// termscp's cache directory, including the `termscp` project subdirectory.
+/// sidemirror's cache directory, including the `sidemirror` project subdirectory.
 ///
 /// The cache directory stays at the platform-native location (`dirs::cache_dir`)
 /// on every platform.
 #[cfg(not(test))]
 static CACHE_DIR: LazyLock<Option<PathBuf>> =
-    LazyLock::new(|| dirs::cache_dir().map(|dir| dir.join("termscp")));
+    LazyLock::new(|| dirs::cache_dir().map(|dir| dir.join("sidemirror")));
 #[cfg(test)]
 static CACHE_DIR: LazyLock<Option<PathBuf>> =
-    LazyLock::new(|| Some(std::env::temp_dir().join("termscp")));
+    LazyLock::new(|| Some(std::env::temp_dir().join("sidemirror")));
 
-/// Resolves termscp's configuration directory for the current platform,
-/// including the `termscp` project subdirectory.
+/// Resolves sidemirror's configuration directory for the current platform,
+/// including the `sidemirror` project subdirectory.
 ///
 /// The location is platform-specific:
 ///
-/// - **Linux** (and other Unix): `$XDG_CONFIG_HOME/termscp` (usually `~/.config/termscp`)
-/// - **macOS**: `~/.config/termscp` (instead of `~/Library/Application Support/termscp`)
-/// - **Windows**: `%USERPROFILE%\.termscp` (instead of the roaming `%APPDATA%\termscp`)
+/// - **Linux** (and other Unix): `$XDG_CONFIG_HOME/sidemirror` (usually `~/.config/sidemirror`)
+/// - **macOS**: `~/.config/sidemirror` (instead of `~/Library/Application Support/sidemirror`)
+/// - **Windows**: `%USERPROFILE%\.sidemirror` (instead of the roaming `%APPDATA%\sidemirror`)
 #[cfg(not(test))]
 fn config_dir() -> Option<PathBuf> {
     #[cfg(macos)]
     {
-        // macOS: use ~/.config/termscp for consistency with Linux and easier
-        // CLI access, instead of ~/Library/Application Support/termscp.
-        dirs::home_dir().map(|home| home.join(".config").join("termscp"))
+        // macOS: use ~/.config/sidemirror for consistency with Linux and easier
+        // CLI access, instead of ~/Library/Application Support/sidemirror.
+        dirs::home_dir().map(|home| home.join(".config").join("sidemirror"))
     }
     #[cfg(win)]
     {
-        // Windows: use %USERPROFILE%\.termscp instead of the roaming %APPDATA%.
-        dirs::home_dir().map(|home| home.join(".termscp"))
+        // Windows: use %USERPROFILE%\.sidemirror instead of the roaming %APPDATA%.
+        dirs::home_dir().map(|home| home.join(".sidemirror"))
     }
     #[cfg(not(any(macos, win)))]
     {
         // Linux and other platforms: keep the XDG-compliant location.
-        dirs::config_dir().map(|dir| dir.join("termscp"))
+        dirs::config_dir().map(|dir| dir.join("sidemirror"))
     }
 }
 
@@ -63,8 +63,8 @@ fn config_dir() -> Option<PathBuf> {
 fn legacy_config_dir() -> Option<PathBuf> {
     #[cfg(any(macos, win))]
     {
-        // Before 1.1.0 the config dir was always `dirs::config_dir()/termscp`.
-        dirs::config_dir().map(|dir| dir.join("termscp"))
+        // Before 1.1.0 the config dir was always `dirs::config_dir()/sidemirror`.
+        dirs::config_dir().map(|dir| dir.join("sidemirror"))
     }
     #[cfg(not(any(macos, win)))]
     {
@@ -79,7 +79,7 @@ fn legacy_config_dir() -> Option<PathBuf> {
     None
 }
 
-/// Get termscp config directory path and initialize it.
+/// Get sidemirror config directory path and initialize it.
 /// Returns None if it's not possible to initialize it
 pub fn init_config_dir() -> Result<Option<PathBuf>, String> {
     let Some(dir) = CONF_DIR.as_deref() else {
@@ -91,7 +91,7 @@ pub fn init_config_dir() -> Result<Option<PathBuf>, String> {
     init_dir(dir).map(Option::Some)
 }
 
-/// Get termscp cache directory path and initialize it.
+/// Get sidemirror cache directory path and initialize it.
 /// Returns None if it's not possible to initialize it
 pub fn init_cache_dir() -> Result<Option<PathBuf>, String> {
     if let Some(dir) = CACHE_DIR.as_deref() {
@@ -121,7 +121,7 @@ fn migrate_config_dir(legacy: Option<&Path>, new_dir: &Path) -> Result<(), Strin
     std::fs::rename(legacy, new_dir).map_err(|err| err.to_string())
 }
 
-/// Init a termscp env dir, creating it if it doesn't already exist.
+/// Init a sidemirror env dir, creating it if it doesn't already exist.
 fn init_dir(p: &Path) -> Result<PathBuf, String> {
     // If the directory already exists, there's nothing to do.
     if p.is_dir() {
@@ -156,7 +156,7 @@ pub fn get_config_paths(config_dir: &Path) -> (PathBuf, PathBuf) {
 /// Returns the path for the supposed log file
 pub fn get_log_paths(cache_dir: &Path) -> PathBuf {
     let mut log_file: PathBuf = PathBuf::from(cache_dir);
-    log_file.push("termscp.log");
+    log_file.push("sidemirror.log");
     log_file
 }
 
@@ -202,7 +202,7 @@ mod tests {
     #[serial]
     fn test_system_environment_get_config_dir_err() {
         let mut conf_dir: PathBuf = std::env::temp_dir();
-        conf_dir.push("termscp");
+        conf_dir.push("sidemirror");
         // Create file
         let mut f: File = OpenOptions::new()
             .create(true)
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     #[serial]
     fn should_migrate_legacy_config_dir() {
-        let base = std::env::temp_dir().join("termscp-migrate-test-move");
+        let base = std::env::temp_dir().join("sidemirror-migrate-test-move");
         let legacy = base.join("legacy");
         let new_dir = base.join("new");
         // Clean up any leftovers from a previous run
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     #[serial]
     fn should_not_migrate_when_new_dir_exists() {
-        let base = std::env::temp_dir().join("termscp-migrate-test-keep");
+        let base = std::env::temp_dir().join("sidemirror-migrate-test-keep");
         let legacy = base.join("legacy");
         let new_dir = base.join("new");
         let _ = std::fs::remove_dir_all(&base);
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     #[serial]
     fn should_not_migrate_without_legacy_dir() {
-        let base = std::env::temp_dir().join("termscp-migrate-test-none");
+        let base = std::env::temp_dir().join("sidemirror-migrate-test-none");
         let new_dir = base.join("new");
         let _ = std::fs::remove_dir_all(&base);
         // No legacy dir at all
@@ -277,8 +277,8 @@ mod tests {
     #[serial]
     fn test_system_environment_get_bookmarks_paths() {
         assert_eq!(
-            get_bookmarks_paths(Path::new("/home/omar/.config/termscp/")),
-            PathBuf::from("/home/omar/.config/termscp/bookmarks.toml"),
+            get_bookmarks_paths(Path::new("/home/omar/.config/sidemirror/")),
+            PathBuf::from("/home/omar/.config/sidemirror/bookmarks.toml"),
         );
     }
 
@@ -286,10 +286,10 @@ mod tests {
     #[serial]
     fn test_system_environment_get_config_paths() {
         assert_eq!(
-            get_config_paths(Path::new("/home/omar/.config/termscp/")),
+            get_config_paths(Path::new("/home/omar/.config/sidemirror/")),
             (
-                PathBuf::from("/home/omar/.config/termscp/config.toml"),
-                PathBuf::from("/home/omar/.config/termscp/.ssh/")
+                PathBuf::from("/home/omar/.config/sidemirror/config.toml"),
+                PathBuf::from("/home/omar/.config/sidemirror/.ssh/")
             )
         );
     }
@@ -298,8 +298,8 @@ mod tests {
     #[serial]
     fn test_system_environment_get_log_paths() {
         assert_eq!(
-            get_log_paths(Path::new("/home/omar/.cache/termscp/")),
-            PathBuf::from("/home/omar/.cache/termscp/termscp.log"),
+            get_log_paths(Path::new("/home/omar/.cache/sidemirror/")),
+            PathBuf::from("/home/omar/.cache/sidemirror/sidemirror.log"),
         );
     }
 
@@ -307,8 +307,8 @@ mod tests {
     #[serial]
     fn test_system_environment_get_theme_path() {
         assert_eq!(
-            get_theme_path(Path::new("/home/omar/.config/termscp/")),
-            PathBuf::from("/home/omar/.config/termscp/theme.toml"),
+            get_theme_path(Path::new("/home/omar/.config/sidemirror/")),
+            PathBuf::from("/home/omar/.config/sidemirror/theme.toml"),
         );
     }
 }

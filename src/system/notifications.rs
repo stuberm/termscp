@@ -6,7 +6,7 @@
 use notify_rust::Hint;
 use notify_rust::{Notification as OsNotification, Timeout};
 
-/// A notification helper which provides all the functions to send the available notifications for termscp
+/// A notification helper which provides all the functions to send the available notifications for sidemirror
 pub struct Notification;
 
 impl Notification {
@@ -24,11 +24,15 @@ impl Notification {
         Self::notify("Transfer failed ❌", body.as_ref(), Some("transfer.error"));
     }
 
-    /// Notify a new version of termscp is available for download
+    /// Notify a new version of sidemirror is available for download
     pub fn update_available<S: AsRef<str>>(version: S) {
         Self::notify(
             "New version available ⬇️",
-            format!("termscp {} is now available for download", version.as_ref()).as_str(),
+            format!(
+                "sidemirror {} is now available for download",
+                version.as_ref()
+            )
+            .as_str(),
             None,
         );
     }
@@ -37,7 +41,7 @@ impl Notification {
     pub fn update_installed<S: AsRef<str>>(version: S) {
         Self::notify(
         "Update installed 🎉",
-            format!("termscp {} has been installed! Restart termscp to enjoy the latest version of termscp 🙂", version.as_ref()).as_str(),
+            format!("sidemirror {} has been installed! Restart sidemirror to enjoy the latest version of sidemirror 🙂", version.as_ref()).as_str(),
         None,
         );
     }

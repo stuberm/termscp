@@ -378,10 +378,10 @@ mod test {
             file.path(),
             r#"{
                 "type": "service_account",
-                "client_email": "termscp@example.iam.gserviceaccount.com",
+                "client_email": "sidemirror@example.iam.gserviceaccount.com",
                 "private_key_id": "test-key",
                 "private_key": "-----BEGIN PRIVATE KEY-----\ninvalid-test-key\n-----END PRIVATE KEY-----\n",
-                "project_id": "termscp-test",
+                "project_id": "sidemirror-test",
                 "universe_domain": "googleapis.com"
             }"#,
         )

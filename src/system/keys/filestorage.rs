@@ -114,7 +114,7 @@ mod tests {
         let storage: FileStorage = FileStorage::new(key_dir.path());
         // Supported
         assert!(storage.is_supported());
-        let app_name: &str = "termscp";
+        let app_name: &str = "sidemirror";
         let secret: &str = "Th15-15/My-Супер-Секрет";
         // Secret should not exist
         assert!(storage.get_key(app_name).is_err());
@@ -128,7 +128,7 @@ mod tests {
     fn test_system_keys_filestorage_err() {
         let bad_dir: &Path = Path::new("/piro/poro/pero/");
         let storage: FileStorage = FileStorage::new(bad_dir);
-        let app_name: &str = "termscp";
+        let app_name: &str = "sidemirror";
         let secret: &str = "Th15-15/My-Супер-Секрет";
         assert!(storage.set_key(app_name, secret).is_err());
     }

@@ -1,6 +1,6 @@
 //! ## Import SSH Hosts
 //!
-//! Imports OpenSSH host entries into termscp bookmarks and optionally registers
+//! Imports OpenSSH host entries into sidemirror bookmarks and optionally registers
 //! referenced private keys in the configured SSH key storage.
 
 use std::fs::File;

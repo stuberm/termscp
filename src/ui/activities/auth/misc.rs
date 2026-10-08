@@ -259,7 +259,7 @@ impl AuthActivity {
         }
     }
 
-    /// Install latest termscp version via GUI
+    /// Install latest sidemirror version via GUI
     pub(super) fn install_update(&mut self) {
         // Umount release notes
         self.umount_release_notes();
@@ -273,12 +273,14 @@ impl AuthActivity {
         self.umount_wait();
         // Show outcome
         match result {
-            Ok(UpdateStatus::AlreadyUptodate) => self.mount_info("termscp is already up to date!"),
+            Ok(UpdateStatus::AlreadyUptodate) => {
+                self.mount_info("sidemirror is already up to date!")
+            }
             Ok(UpdateStatus::UpdateInstalled(ver)) => {
                 if self.config().get_notifications() {
                     Notification::update_installed(ver.as_str());
                 }
-                self.mount_info(format!("termscp has been updated to version {ver}!"))
+                self.mount_info(format!("sidemirror has been updated to version {ver}!"))
             }
             Err(err) => {
                 if self.config().get_notifications() {

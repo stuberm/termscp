@@ -1,29 +1,29 @@
 # 主题
 
-termscp 允许你为应用程序中的多个组件设置颜色。有两种方式可以自定义 termscp：
+sidemirror 允许你为应用程序中的多个组件设置颜色。有两种方式可以自定义 sidemirror：
 
 - 通过 **配置菜单**
 - 导入 **主题文件**
 
 ## 通过配置菜单自定义
 
-要通过配置菜单自定义 termscp，请在认证界面按 `<CTRL+C>` 进入配置，然后按两次 `<TAB>` 到达 `themes` 面板。使用 `<UP>` 和 `<DOWN>` 移动以选择你想更改的样式，如下面的 gif 所示：
+要通过配置菜单自定义 sidemirror，请在认证界面按 `<CTRL+C>` 进入配置，然后按两次 `<TAB>` 到达 `themes` 面板。使用 `<UP>` 和 `<DOWN>` 移动以选择你想更改的样式，如下面的 gif 所示：
 
 ![Themes](https://github.com/veeso/termscp/blob/main/assets/images/themes.gif?raw=true)
 
 ## 导入主题文件
 
-你也可以导入主题文件。你可以从仓库 `themes/` 目录中随 termscp 附带的某个主题获取灵感，或直接使用它。通过运行以下命令导入主题：
+你也可以导入主题文件。你可以从仓库 `themes/` 目录中随 sidemirror 附带的某个主题获取灵感，或直接使用它。通过运行以下命令导入主题：
 
 ```sh
-termscp theme <theme_file>
+sidemirror theme <theme_file>
 ```
 
-如果一切正常，termscp 会确认主题已导入。
+如果一切正常，sidemirror 会确认主题已导入。
 
 ## 颜色语法
 
-termscp 接受以下颜色格式：
+sidemirror 接受以下颜色格式：
 
 - 显式十六进制：`#rrggbb`
 - RGB：`rgb(r, g, b)`
@@ -37,14 +37,14 @@ termscp 接受以下颜色格式：
 1. 重新导入官方主题。每次发布后，官方主题都会被修补，因此从仓库下载更新后的主题并重新导入：
 
    ```sh
-   termscp theme <theme.toml>
+   sidemirror theme <theme.toml>
    ```
 
 2. 手动编辑你的主题。如果你使用自定义主题，请编辑该文件并添加缺失的键。主题位于 `$CONFIG_DIR/theme.toml`，其中 `$CONFIG_DIR` 为：
 
-   - FreeBSD/Linux：`$HOME/.config/termscp`
-   - macOS：`$HOME/.config/termscp`
-   - Windows：`%USERPROFILE%\.termscp`
+   - FreeBSD/Linux：`$HOME/.config/sidemirror`
+   - macOS：`$HOME/.config/sidemirror`
+   - Windows：`%USERPROFILE%\.sidemirror`
 
    缺失的键会在你刚安装的版本的 CHANGELOG 中 `BREAKING CHANGES` 部分列出。
 

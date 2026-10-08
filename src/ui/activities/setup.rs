@@ -1,7 +1,7 @@
 //! ## SetupActivity
 //!
 //! `setup_activity` is the module which implements the Setup activity, which is the activity to
-//! work on termscp configuration
+//! work on sidemirror configuration
 
 // Submodules
 mod actions;

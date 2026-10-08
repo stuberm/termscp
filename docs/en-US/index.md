@@ -1,11 +1,11 @@
-# termscp
+# sidemirror
 
-![termscp explorer](https://github.com/veeso/termscp/blob/main/assets/images/explorer.gif?raw=true)
+![sidemirror explorer](https://github.com/veeso/termscp/blob/main/assets/images/explorer.gif?raw=true)
 
-termscp is a feature-rich terminal file transfer client and explorer with a
+sidemirror is a feature-rich terminal file transfer client and explorer with a
 TUI (Terminal User Interface). It lets you connect to a remote server to
 upload and download files while interacting with your local file system at the
-same time. termscp runs on Linux, macOS, FreeBSD, NetBSD, and Windows.
+same time. sidemirror runs on Linux, macOS, FreeBSD, NetBSD, and Windows.
 
 ## Features
 

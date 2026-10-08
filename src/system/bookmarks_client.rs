@@ -103,9 +103,9 @@ impl BookmarksClient {
             let storage: KeyringStorage = KeyringStorage::new(username.as_str());
             // Check if keyring storage is supported
             #[cfg(not(test))]
-            let app_name: &str = "termscp";
+            let app_name: &str = "sidemirror";
             #[cfg(test)] // NOTE: when running test, add -test
-            let app_name: &str = "termscp-test";
+            let app_name: &str = "sidemirror-test";
             match storage.is_supported() {
                 true => {
                     debug!("Using KeyringStorage");

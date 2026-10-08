@@ -1,14 +1,14 @@
 # 书签与最近主机
 
-termscp 允许你将常用的主机保存为书签，随后可从主界面快速加载它们。termscp 还会保留你最近连接过的 16 个主机。这两项功能都让你只需在认证表单下方的选项卡中选择一个条目，即可重新加载连接到某个远程所需的全部参数。
+sidemirror 允许你将常用的主机保存为书签，随后可从主界面快速加载它们。sidemirror 还会保留你最近连接过的 16 个主机。这两项功能都让你只需在认证表单下方的选项卡中选择一个条目，即可重新加载连接到某个远程所需的全部参数。
 
 ## 书签的存储位置
 
 书签会在可能的情况下保存在配置目录中：
 
-- Linux/BSD 上为 `$HOME/.config/termscp/`
-- macOS 上为 `$HOME/.config/termscp/`
-- Windows 上为 `%USERPROFILE%\.termscp\`
+- Linux/BSD 上为 `$HOME/.config/sidemirror/`
+- macOS 上为 `$HOME/.config/sidemirror/`
+- Windows 上为 `%USERPROFILE%\.sidemirror\`
 
 ## 保存密码
 

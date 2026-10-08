@@ -1,6 +1,6 @@
 //! ## Config
 //!
-//! `config` is the module which provides access to all the termscp configurations
+//! `config` is the module which provides access to all the sidemirror configurations
 
 // export
 

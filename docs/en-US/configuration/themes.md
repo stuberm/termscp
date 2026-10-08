@@ -1,14 +1,14 @@
 # Themes
 
-termscp lets you set the colors for several components in the application. There
-are two ways to customize termscp:
+sidemirror lets you set the colors for several components in the application. There
+are two ways to customize sidemirror:
 
 - From the **configuration menu**
 - Importing a **theme file**
 
 ## Customize from the configuration menu
 
-To customize termscp from the configuration menu, enter the configuration from
+To customize sidemirror from the configuration menu, enter the configuration from
 the auth screen by pressing `<CTRL+C>`, then press `<TAB>` twice to reach the
 `themes` panel. Move with `<UP>` and `<DOWN>` to select the style you want to
 change, as shown in the gif below:
@@ -18,18 +18,18 @@ change, as shown in the gif below:
 ## Import a theme file
 
 You can also import theme files. You can take inspiration from, or directly use,
-one of the themes bundled with termscp in the `themes/` directory of the
+one of the themes bundled with sidemirror in the `themes/` directory of the
 repository. Import a theme by running:
 
 ```sh
-termscp theme <theme_file>
+sidemirror theme <theme_file>
 ```
 
-If everything is fine, termscp confirms the theme has been imported.
+If everything is fine, sidemirror confirms the theme has been imported.
 
 ## Color syntax
 
-termscp accepts the following color formats:
+sidemirror accepts the following color formats:
 
 - Explicit hexadecimal: `#rrggbb`
 - RGB: `rgb(r, g, b)`
@@ -48,16 +48,16 @@ are two quick fixes:
    patched, so download the updated theme from the repository and re-import it:
 
    ```sh
-   termscp theme <theme.toml>
+   sidemirror theme <theme.toml>
    ```
 
 2. Edit your theme by hand. If you use a custom theme, edit the file and add the
    missing key. The theme is located at `$CONFIG_DIR/theme.toml`, where
    `$CONFIG_DIR` is:
 
-   - FreeBSD/Linux: `$HOME/.config/termscp`
-   - macOS: `$HOME/.config/termscp`
-   - Windows: `%USERPROFILE%\.termscp`
+   - FreeBSD/Linux: `$HOME/.config/sidemirror`
+   - macOS: `$HOME/.config/sidemirror`
+   - Windows: `%USERPROFILE%\.sidemirror`
 
    Missing keys are reported in the CHANGELOG under `BREAKING CHANGES` for the
    version you have just installed.

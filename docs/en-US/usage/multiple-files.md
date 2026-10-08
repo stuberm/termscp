@@ -1,6 +1,6 @@
 # Working with multiple files
 
-termscp lets you act on several files at once. Use these controls to build a selection.
+sidemirror lets you act on several files at once. Use these controls to build a selection.
 
 - `<M>`: mark the highlighted file for selection.
 - `<CTRL+A>`: select all files in the current directory.

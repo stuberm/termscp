@@ -1,33 +1,33 @@
 # 配置
 
-termscp 支持大量用户自定义参数。termscp 将这些参数存储在一个 TOML 文件和若干目录中，但你无需手动编辑这些文件：所有配置都完全在用户界面中完成。
+sidemirror 支持大量用户自定义参数。sidemirror 将这些参数存储在一个 TOML 文件和若干目录中，但你无需手动编辑这些文件：所有配置都完全在用户界面中完成。
 
-要进入配置界面，请在 termscp 主页按下 `<CTRL+C>`。
+要进入配置界面，请在 sidemirror 主页按下 `<CTRL+C>`。
 
-termscp 要求以下路径可访问：
+sidemirror 要求以下路径可访问：
 
-- Linux/BSD 上的 `$HOME/.config/termscp/`
-- macOS 上的 `$HOME/.config/termscp/`
-- Windows 上的 `%USERPROFILE%\.termscp\`
+- Linux/BSD 上的 `$HOME/.config/sidemirror/`
+- macOS 上的 `$HOME/.config/sidemirror/`
+- Windows 上的 `%USERPROFILE%\.sidemirror\`
 
 ## 参数
 
 可以配置以下参数：
 
-- **文本编辑器**：要使用的文本编辑器。默认情况下，termscp 会为你查找默认编辑器；通过此选项你可以强制使用某个编辑器（例如 `vim`）。也支持 GUI 编辑器，除非它们会从父进程中分离（`nohup`）。
-- **默认协议**：termscp 中使用的文件传输协议的默认值。它适用于登录页面以及地址命令行参数。
+- **文本编辑器**：要使用的文本编辑器。默认情况下，sidemirror 会为你查找默认编辑器；通过此选项你可以强制使用某个编辑器（例如 `vim`）。也支持 GUI 编辑器，除非它们会从父进程中分离（`nohup`）。
+- **默认协议**：sidemirror 中使用的文件传输协议的默认值。它适用于登录页面以及地址命令行参数。
 - **显示隐藏文件**：是否默认显示隐藏文件。你也可以在运行时按 `A` 切换隐藏文件的显示。
-- **检查更新**：如果设置为 `yes`，termscp 会查询 GitHub API 以检查是否有新版本的 termscp 可用。
-- **替换已有文件时提示**：如果设置为 `yes`，每当文件传输会替换目标主机上已有的文件时，termscp 都会请求确认。
+- **检查更新**：如果设置为 `yes`，sidemirror 会查询 GitHub API 以检查是否有新版本的 sidemirror 可用。
+- **替换已有文件时提示**：如果设置为 `yes`，每当文件传输会替换目标主机上已有的文件时，sidemirror 都会请求确认。
 - **目录分组**：文件浏览器中是否将目录分组。如果选择 `Display first`，目录会按配置的方法排序，但显示在文件之前；如果选择 `Display last`，则显示在文件之后。
 - **远程文件格式化语法**：用于在远程浏览器中显示每个文件信息的语法。参见 [文件浏览器格式](explorer-format.md)。
 - **本地文件格式化语法**：用于在本地浏览器中显示每个文件信息的语法。参见 [文件浏览器格式](explorer-format.md)。
 - **启用通知**：如果设置为 `Yes`，则会显示桌面通知。参见 [通知](notifications.md)。
 - **通知：最小传输大小**：如果传输大小大于或等于指定值，则显示传输通知。可接受的格式为 `{UNSIGNED} B/KB/MB/GB/TB/PB`。
-- **SSH 配置路径**：连接到 SCP/SFTP 服务器时使用的 SSH 配置文件。如果留空，则不使用任何文件。你可以指定以 `~` 开头的路径来表示主目录（例如 `~/.ssh/config`）。termscp 支持的属性列于 [ssh2-config 公开的属性](https://github.com/veeso/ssh2-config#exposed-attributes)。另请参见 [SSH 密钥存储](ssh-keys.md)。
+- **SSH 配置路径**：连接到 SCP/SFTP 服务器时使用的 SSH 配置文件。如果留空，则不使用任何文件。你可以指定以 `~` 开头的路径来表示主目录（例如 `~/.ssh/config`）。sidemirror 支持的属性列于 [ssh2-config 公开的属性](https://github.com/veeso/ssh2-config#exposed-attributes)。另请参见 [SSH 密钥存储](ssh-keys.md)。
 
 ## SSH 配置行为
 
-在 SFTP 或 SCP 的任一认证面板中，更改并离开 `Host` 字段后，termscp 会保持输入的别名可见，并使用匹配的 SSH 配置条目填充可见的 `Port` 和 `Username` 字段。如果新的 Host 不匹配任何条目，Port 会重置为 `22`，Username 会重置为空。`HostName` 永远不会替换表单中的别名。
+在 SFTP 或 SCP 的任一认证面板中，更改并离开 `Host` 字段后，sidemirror 会保持输入的别名可见，并使用匹配的 SSH 配置条目填充可见的 `Port` 和 `Username` 字段。如果新的 Host 不匹配任何条目，Port 会重置为 `22`，Username 会重置为空。`HostName` 永远不会替换表单中的别名。
 
 书签会保留其保存的 Port 和 User 值；SSH 配置不会在幕后覆盖它们。连接时，已配置的文件仍会提供 `HostName` 和其他受支持的 SSH 选项。

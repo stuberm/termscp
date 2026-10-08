@@ -30,7 +30,7 @@ impl QuitPopup {
                 )
                 .choices(["Yes", "No"])
                 .title(
-                    Title::from("Are you sure you want to quit termscp?")
+                    Title::from("Are you sure you want to quit sidemirror?")
                         .alignment(HorizontalAlignment::Center),
                 ),
         }

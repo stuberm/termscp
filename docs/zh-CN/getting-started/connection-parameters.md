@@ -53,7 +53,7 @@ kube://[namespace][@<cluster_url>][$</path>]
 
 ## S3
 
-termscp 同时支持 AWS S3 和其他兼容 S3 的端点。
+sidemirror 同时支持 AWS S3 和其他兼容 S3 的端点。
 
 认证表单字段：
 
@@ -112,11 +112,11 @@ s3://buckethead@eu-central-1:default:/assets
    - `AWS_SECURITY_TOKEN`：安全令牌
    - `AWS_SESSION_TOKEN`：会话令牌
 
-你的凭据是安全的：termscp 不会直接操作这些值。它们由 `s3` crate 直接使用。
+你的凭据是安全的：sidemirror 不会直接操作这些值。它们由 `s3` crate 直接使用。
 
 ## Google Cloud Storage
 
-termscp 通过 Google Cloud Storage JSON API 支持 Google Cloud Storage（GCS）存储桶。
+sidemirror 通过 Google Cloud Storage JSON API 支持 Google Cloud Storage（GCS）存储桶。
 
 认证表单字段：
 
@@ -124,11 +124,11 @@ termscp 通过 Google Cloud Storage JSON API 支持 Google Cloud Storage（GCS�
 - 端点（默认为 `https://storage.googleapis.com`）
 - 可选的服务账号 JSON 路径
 
-将服务账号 JSON 路径留空即可使用应用默认凭据（ADC）。当 termscp 在 Google
+将服务账号 JSON 路径留空即可使用应用默认凭据（ADC）。当 sidemirror 在 Google
 Cloud 基础设施上运行时，ADC 可以从 `GOOGLE_APPLICATION_CREDENTIALS`、本地
 gcloud ADC 凭据或 Google Cloud 元数据服务中获取凭据。
 
-提供服务账号 JSON 路径后，termscp 会在连接时读取该文件。书签只保存该路径，
+提供服务账号 JSON 路径后，sidemirror 会在连接时读取该文件。书签只保存该路径，
 不会复制服务账号 JSON 或其中的私钥。
 
 专用的 CLI 语法如下：

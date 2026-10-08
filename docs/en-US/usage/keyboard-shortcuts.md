@@ -31,7 +31,7 @@ The following keys are available in the file explorer. Press `<H|F1>` at any tim
 | `<N>`          | Create a new file with the provided name                               |
 | `<O\|F4>`      | Edit the selected file in your text editor                             |
 | `<P>`          | Open the log panel                                                     |
-| `<Q\|F10>`     | Quit termscp                                                           |
+| `<Q\|F10>`     | Quit sidemirror                                                           |
 | `<R\|F6>`      | Rename the selected file                                               |
 | `<S\|F2>`      | Save the selected file as a new name                                   |
 | `<T>`          | Synchronize changes on the selected path to the remote                 |

@@ -40,7 +40,7 @@ Address syntax can be:
     - `\\\\<server>[:port]\\<share>[\\path]` for SMB (on Windows)
     - `smb://[user@]<server>[:port]</share>[/path]` for SMB (on other systems)
 
-Please, report issues to <https://github.com/veeso/termscp>")]
+Sidemirror — terminal file and folder comparison based on termscp.")]
 pub struct Args {
     #[argh(subcommand)]
     pub nested: Option<ArgsSubcommands>,
@@ -81,12 +81,12 @@ pub enum ArgsSubcommands {
 }
 
 #[derive(FromArgs)]
-/// open termscp configuration
+/// open sidemirror configuration
 #[argh(subcommand, name = "config")]
 pub struct ConfigArgs {}
 
 #[derive(FromArgs)]
-/// update termscp to the latest version
+/// update sidemirror to the latest version
 #[argh(subcommand, name = "update")]
 pub struct UpdateArgs {}
 

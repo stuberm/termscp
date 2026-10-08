@@ -8,7 +8,7 @@
 - [Connecting to a server](getting-started/connecting.md)
 - [Connection parameters](getting-started/connection-parameters.md)
 
-# Using termscp
+# Using sidemirror
 
 - [The file explorer](usage/file-explorer.md)
 - [Keyboard shortcuts](usage/keyboard-shortcuts.md)

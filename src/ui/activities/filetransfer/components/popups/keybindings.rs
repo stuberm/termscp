@@ -103,7 +103,7 @@ impl KeybindingsPopup {
                         .add_col(SpanStatic::from("               Toggle bottom panel"))
                         .add_row()
                         .add_col(SpanStatic::raw("<Q|F10>").bold().fg(key_color))
-                        .add_col(SpanStatic::from("           Quit termscp"))
+                        .add_col(SpanStatic::from("           Quit sidemirror"))
                         .add_row()
                         .add_col(SpanStatic::raw("<R|F6>").bold().fg(key_color))
                         .add_col(SpanStatic::from("            Rename file"))

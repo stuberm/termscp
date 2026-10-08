@@ -8,7 +8,7 @@
 - [连接到服务器](getting-started/connecting.md)
 - [连接参数](getting-started/connection-parameters.md)
 
-# 使用 termscp
+# 使用 sidemirror
 
 - [文件浏览器](usage/file-explorer.md)
 - [键盘快捷键](usage/keyboard-shortcuts.md)

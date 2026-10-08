@@ -1,18 +1,18 @@
 # Developer manual
 
-Welcome to the developer manual for termscp. This chapter does NOT contain the
-documentation for termscp modules, which can instead be found on Rust Docs at
-<https://docs.rs/termscp>. This chapter describes how termscp works and the
+Welcome to the developer manual for sidemirror. This chapter does NOT contain the
+documentation for sidemirror modules, which can instead be found on Rust Docs at
+<https://docs.rs/termscp>. This chapter describes how sidemirror works and the
 guidelines to implement features such as file transfers and additions to the
 user interface.
 
-termscp is written in Rust (edition 2024, MSRV 1.98.0). The user interface is
+sidemirror is written in Rust (edition 2024, MSRV 1.98.0). The user interface is
 built with [tuirealm](https://github.com/veeso/tui-realm) v3, which runs on top
 of [crossterm](https://github.com/crossterm-rs/crossterm).
 
-## How termscp works
+## How sidemirror works
 
-termscp is basically made up of 3 core modules:
+sidemirror is basically made up of 3 core modules:
 
 - The **host**: the host module provides functions to interact with file
   systems. It exposes the `HostBridge` trait, which abstracts file operations
@@ -37,7 +37,7 @@ In addition to the 3 core modules, others have been added over time:
   storage and the bookmarks.
 - **utils**: contains the utilities used by pretty much all of the project.
 
-termscp supports the following protocols: SFTP, SCP, FTP/FTPS, Kube, S3, GCS,
+sidemirror supports the following protocols: SFTP, SCP, FTP/FTPS, Kube, S3, GCS,
 SMB and WebDAV.
 
 ## Activities
@@ -69,13 +69,13 @@ works best from different frameworks:
   [tui-realm](https://github.com/veeso/tui-realm).
 - **Messages: an Elm-based approach**: input events are handled with an approach
   inspired by [Elm](https://elm-lang.org/). In Elm you implement your ui using
-  three basic functions: **update**, **view** and **init**. termscp implements
+  three basic functions: **update**, **view** and **init**. sidemirror implements
   the equivalent of the Elm update function as a large match case inside a
   recursive function, which you can find in the `update.rs` file inside each
   activity. This match case handles the messages produced by the components in
   response to incoming input events and causes the activity to change its state.
 
-termscp implements a trait called `Activity`, a much reduced version of the
+sidemirror implements a trait called `Activity`, a much reduced version of the
 Android activity. This trait provides these methods:
 
 - `on_create`: initializes the activity. The context is passed to the activity,
@@ -88,7 +88,7 @@ Android activity. This trait provides these methods:
 - `will_umount`: returns whether the activity should be destroyed. If so, it
   returns an `ExitReason`, which indicates why the activity should terminate.
   Based on the reason, the activity manager chooses whether to stop the execution
-  of termscp or to start a new activity, and which one.
+  of sidemirror or to start a new activity, and which one.
 - `on_destroy`: finalizes the activity and drops it. This method returns the
   Context to the caller (the activity manager).
 
@@ -111,8 +111,8 @@ the following data:
 
 ## Achieving an abstract file transfer client
 
-When the implementation of termscp started, in December 2020, file transfer was
-at the core of the design, since it is at the heart of termscp. The first
+When the implementation of sidemirror started, in December 2020, file transfer was
+at the core of the design, since it is at the heart of sidemirror. The first
 implementation consisted of a `filetransfer` module that exposed a trait called
 `FileTransfer`, which provided methods to generically interact with the remote
 file system.

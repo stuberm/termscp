@@ -1,32 +1,32 @@
 # Configuration
 
-termscp supports a number of user-defined parameters. termscp stores them in a
+sidemirror supports a number of user-defined parameters. sidemirror stores them in a
 TOML file and a few directories, but you never edit these files by hand:
 configuration is done entirely from the user interface.
 
-To enter the configuration, press `<CTRL+C>` from the termscp home.
+To enter the configuration, press `<CTRL+C>` from the sidemirror home.
 
-termscp requires these paths to be accessible:
+sidemirror requires these paths to be accessible:
 
-- `$HOME/.config/termscp/` on Linux/BSD
-- `$HOME/.config/termscp/` on macOS
-- `%USERPROFILE%\.termscp\` on Windows
+- `$HOME/.config/sidemirror/` on Linux/BSD
+- `$HOME/.config/sidemirror/` on macOS
+- `%USERPROFILE%\.sidemirror\` on Windows
 
 ## Parameters
 
 The following parameters can be configured:
 
-- **Text Editor**: the text editor to use. By default termscp finds the default
+- **Text Editor**: the text editor to use. By default sidemirror finds the default
   editor for you; with this option you can force an editor to be used (e.g.
   `vim`). GUI editors are also supported, unless they detach (`nohup`) from the
   parent process.
 - **Default Protocol**: the default value for the file transfer protocol to be
-  used in termscp. It applies to the login page and to the address CLI argument.
+  used in sidemirror. It applies to the login page and to the address CLI argument.
 - **Show Hidden Files**: whether hidden files are displayed by default. You can
   also toggle hidden files at runtime by pressing `A`.
-- **Check for updates**: if set to `yes`, termscp queries the GitHub API to
-  check whether a new version of termscp is available.
-- **Prompt when replacing existing files**: if set to `yes`, termscp prompts for
+- **Check for updates**: if set to `yes`, sidemirror queries the GitHub API to
+  check whether a new version of sidemirror is available.
+- **Prompt when replacing existing files**: if set to `yes`, sidemirror prompts for
   confirmation whenever a file transfer would replace an existing file on the
   target host.
 - **Group Dirs**: whether directories are grouped in the file explorers. If
@@ -45,18 +45,18 @@ The following parameters can be configured:
 - **SSH configuration path**: SSH configuration file to use when connecting to a
   SCP/SFTP server. If left empty, no file is used. You can specify a path
   starting with `~` to indicate the home directory (e.g. `~/.ssh/config`). The
-  attributes supported by termscp are listed at
+  attributes supported by sidemirror are listed at
   [the ssh2-config exposed attributes](https://github.com/veeso/ssh2-config#exposed-attributes).
   See also [SSH key storage](ssh-keys.md).
 
 ## SSH configuration behavior
 
 In either SFTP or SCP authentication pane, after you change and leave the
-`Host` field, termscp keeps the entered alias visible and fills the visible
+`Host` field, sidemirror keeps the entered alias visible and fills the visible
 `Port` and `Username` fields from the matching SSH configuration entry. If the
 new Host does not match an entry, it resets Port to `22` and Username to empty.
 `HostName` never replaces the alias in the form.
 
 Bookmarks retain their saved Port and User values; the SSH configuration does
 not silently override them. The configured file still provides `HostName` and
-other supported SSH options when termscp connects.
+other supported SSH options when sidemirror connects.

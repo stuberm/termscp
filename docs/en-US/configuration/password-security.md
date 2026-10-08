@@ -13,7 +13,7 @@ system secret store:
 This is managed directly by your operating system.
 
 On BSD and WSL there is no such secret store, so the encryption key is saved on
-disk at `$HOME/.config/termscp`. The location protects the key with file
+disk at `$HOME/.config/sidemirror`. The location protects the key with file
 permissions so that it cannot be read by other users, but you should still avoid
 saving passwords for servers exposed on the internet on these systems.
 
@@ -27,14 +27,14 @@ few services provide it:
   is already provided by `gnome-keyring` and everything should work out of the
   box.
 - For other desktop environments, you can use [KeepassXC](https://keepassxc.org/)
-  to obtain a keyring. It must be set up to work with termscp; see
+  to obtain a keyring. It must be set up to work with sidemirror; see
   [KeepassXC setup](#keepassxc-setup) below.
-- If you do not want to install any of these services, termscp keeps working as
+- If you do not want to install any of these services, sidemirror keeps working as
   usual and falls back to saving the key in a file, as it does for BSD and WSL.
 
 ### KeepassXC setup
 
-Follow these steps to set up KeepassXC for termscp:
+Follow these steps to set up KeepassXC for sidemirror:
 
 1. Install KeepassXC.
 2. Go to "Tools" > "Settings" in the toolbar.
@@ -45,5 +45,5 @@ Follow these steps to set up KeepassXC for termscp:
 5. From the toolbar, go to "Database" > "Database settings".
 6. Select "Secret service integration" and enable "Expose entries under this
    group".
-7. Select the group where the termscp secret will be kept. Note that any other
+7. Select the group where the sidemirror secret will be kept. Note that any other
    application can read secrets exposed via D-Bus for that group.

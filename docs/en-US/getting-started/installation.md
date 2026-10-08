@@ -1,102 +1,26 @@
 # Installation
 
-termscp is available for many platforms. Pick the method that matches your
-system below.
+Sidemirror is currently built from source. Published termscp packages and upstream installer scripts do not install sidemirror.
 
-## Linux, FreeBSD, and macOS
-
-This shell script installs termscp on your system with a single command:
+Install Rust using rustup, then run from the repository root:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -sSLf https://termscp.rs/install.sh | sh
+cargo run --no-default-features
 ```
 
-On macOS the installation requires [Homebrew](https://brew.sh/); otherwise the
-Rust compiler is installed to build termscp from source.
+The required Rust version is pinned in `rust-toolchain.toml`. Disabling default features removes SMB and system-keyring support, but retains FTP, FTPS, and SFTP.
 
-## Windows
-
-Install termscp from PowerShell with a single command:
-
-```ps
-irm https://termscp.rs/install.ps1 | iex
-```
-
-Alternatively, install it with [Chocolatey](https://chocolatey.org/):
-
-```ps
-choco install termscp
-```
-
-## NetBSD
-
-Install termscp from the official repositories:
+For an optimized build:
 
 ```sh
-pkgin install termscp
+cargo build --release --no-default-features
+./target/release/sidemirror
 ```
 
-## Arch Linux
+On Windows, run `target\release\sidemirror.exe`.
 
-Install termscp from the official repositories:
+For default features, install `pkg-config` and Samba on macOS, or `libdbus-1-dev` and `libsmbclient-dev` on Linux, then run `cargo run`.
 
-```sh
-pacman -S termscp
-```
+Sidemirror uses separate configuration and cache directories from termscp. Existing termscp data is not automatically imported.
 
-## Official binaries
-
-Official release binaries are published for these targets:
-
-- GNU/Linux:
-  - `x86_64-unknown-linux-musl`
-  - `aarch64-unknown-linux-musl`
-- macOS:
-  - `x86_64-apple-darwin`
-  - `aarch64-apple-darwin`
-- Windows:
-  - `x86_64-pc-windows-msvc`
-  - `aarch64-pc-windows-msvc`
-
-The Linux binaries, and the `.deb` package built from them, are statically
-linked against musl. They have no runtime dependencies: they run on any Linux
-distribution and any glibc version, with no system packages to install.
-
-## Requirements
-
-The official binaries do not require these dependencies. They are needed only
-to build termscp from source, for example with `cargo install termscp`:
-
-- Linux users:
-  - libdbus-1
-  - pkg-config
-  - libsmbclient
-- FreeBSD and NetBSD users:
-  - dbus
-  - pkgconf
-  - libsmbclient
-
-### Optional requirements
-
-These dependencies are not required to run termscp, but they are needed to
-enjoy all of its features.
-
-- Linux and FreeBSD users, to open files via `V` (at least one of these):
-  - xdg-open
-  - gio
-  - gnome-open
-  - kde-open
-- Linux users: a keyring manager. Read more in the
-  [Password security](../configuration/password-security.md) page.
-- WSL users, to open files via `V`:
-  - [wslu](https://github.com/wslutilities/wslu)
-
-## Updating termscp
-
-To update termscp to the latest version, run it from the command line with:
-
-```sh
-(sudo) termscp update
-```
-
-For all platforms and methods, see <https://termscp.rs/install>.
+Automatic updates are disabled unless `SIDEMIRROR_UPDATE_REPOSITORY=owner/repo` is set when compiling a build intended for that release repository. For ordinary source builds, update your checkout and rebuild.

@@ -1,6 +1,6 @@
 # The file explorer
 
-After you establish a connection with a remote host, termscp shows the file explorer. The explorer is made up of three panels.
+After you establish a connection with a remote host, sidemirror shows the file explorer. The explorer is made up of three panels.
 
 - **Local explorer panel**: displayed on the left of the screen. It shows the entries of the current directory on localhost.
 - **Remote explorer panel**: displayed on the right of the screen. It shows the entries of the current directory on the remote host.

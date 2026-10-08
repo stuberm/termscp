@@ -11,11 +11,11 @@ impl FileTransferActivity {
     /// This function doesn't return errors.
     pub(in crate::ui::activities::filetransfer) fn init_config_client() -> ConfigClient {
         match environment::init_config_dir() {
-            Ok(termscp_dir) => match termscp_dir {
-                Some(termscp_dir) => {
+            Ok(sidemirror_dir) => match sidemirror_dir {
+                Some(sidemirror_dir) => {
                     // Make configuration file path and ssh keys path
                     let (config_path, ssh_keys_path): (PathBuf, PathBuf) =
-                        environment::get_config_paths(termscp_dir.as_path());
+                        environment::get_config_paths(sidemirror_dir.as_path());
                     match ConfigClient::new(config_path.as_path(), ssh_keys_path.as_path()) {
                         Ok(config_client) => config_client,
                         Err(_) => ConfigClient::degraded(),

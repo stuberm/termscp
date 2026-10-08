@@ -22,7 +22,7 @@ impl Default for Title {
         Self {
             component: Label::default()
                 .modifiers(TextModifiers::BOLD | TextModifiers::ITALIC)
-                .text("$ termscp"),
+                .text("$ sidemirror"),
         }
     }
 }
@@ -67,7 +67,7 @@ impl NewVersionDisclaimer {
     pub fn new(new_version: &str, color: Color) -> Self {
         Self {
             component: Span::default().foreground(color).spans([
-                SpanStatic::from("termscp "),
+                SpanStatic::from("sidemirror "),
                 SpanStatic::raw(new_version.to_string()).underlined().bold(),
                 SpanStatic::from(
                     " is NOW available! Install update and view release notes with <CTRL+R>",

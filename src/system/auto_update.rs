@@ -1,6 +1,6 @@
 //! ## Auto update
 //!
-//! Automatic update module. This module is used to upgrade the current version of termscp to the latest available on Github
+//! Automatic update module. This module is used to upgrade the current version of sidemirror to the latest available on Github
 
 use std::net::ToSocketAddrs as _;
 
@@ -14,7 +14,7 @@ use crate::utils::parser::parse_semver;
 /// The status of the update in case of success
 #[derive(Debug, Eq, PartialEq)]
 pub enum UpdateStatus {
-    /// Termscp is already up to date
+    /// Sidemirror is already up to date
     AlreadyUptodate,
     /// The update has been correctly installed
     UpdateInstalled(String),
@@ -30,7 +30,7 @@ pub struct Release {
 }
 
 /// The update structure defines the options used to install the update.
-/// Once you're fine with the options, just call the `upgrade()` method to upgrade termscp.
+/// Once you're fine with the options, just call the `upgrade()` method to upgrade sidemirror.
 #[derive(Debug, Default)]
 pub struct Update {
     ask_confirm: bool,
@@ -54,7 +54,7 @@ impl Update {
     /// official release assets.
     ///
     /// Official Linux binaries are statically linked against musl, so a
-    /// termscp built against glibc (for example via `cargo install`) must
+    /// sidemirror built against glibc (for example via `cargo install`) must
     /// still download the `-musl` asset.
     fn map_release_target(target: &str) -> String {
         if target.contains("-linux-") {
@@ -64,14 +64,28 @@ impl Update {
         }
     }
 
+    /// Returns the explicitly configured fork release repository.
+    fn release_repository() -> Result<(&'static str, &'static str), UpdateError> {
+        option_env!("SIDEMIRROR_UPDATE_REPOSITORY")
+            .and_then(|repository| repository.split_once('/'))
+            .filter(|(owner, repo)| !owner.is_empty() && !repo.is_empty() && !repo.contains('/'))
+            .ok_or_else(|| {
+                UpdateError::Network(
+                    "Automatic updates are disabled for this build; rebuild sidemirror from source"
+                        .into(),
+                )
+            })
+    }
+
     /// Installs the latest available release using the configured update options.
     pub fn upgrade(self) -> Result<UpdateStatus, UpdateError> {
-        info!("Updating termscp...");
+        let (owner, repo) = Self::release_repository()?;
+        info!("Updating sidemirror...");
         GithubUpdater::configure()
             // Set default options
-            .repo_owner("veeso")
-            .repo_name("termscp")
-            .bin_name("termscp")
+            .repo_owner(owner)
+            .repo_name(repo)
+            .bin_name("sidemirror")
             .target(&Self::map_release_target(self_update::get_target()))
             .current_version(cargo_crate_version!())
             .no_confirm(!self.ask_confirm)
@@ -82,21 +96,22 @@ impl Update {
             .map(UpdateStatus::from)
     }
 
-    /// Returns whether a new version of termscp is available
+    /// Returns whether a new version of sidemirror is available
     /// In case of success returns `Ok(Option<Release>)`, where the option is
     /// `Some(new_version)`;
     /// otherwise if no version is available, return None
     /// In case of error returns Error with the error description
     pub fn is_new_version_available() -> Result<Option<Release>, UpdateError> {
+        let (owner, repo) = Self::release_repository()?;
         // check if api.github.com is reachable before doing anything
         Self::check_github_api_reachable()?;
 
         info!("Checking whether a new version is available...");
         GithubUpdater::configure()
             // Set default options
-            .repo_owner("veeso")
-            .repo_name("termscp")
-            .bin_name("termscp")
+            .repo_owner(owner)
+            .repo_name(repo)
+            .bin_name("sidemirror")
             .current_version(cargo_crate_version!())
             .no_confirm(true)
             .show_download_progress(false)
@@ -275,7 +290,7 @@ mod test {
     #[test]
     fn release() {
         let release: UpdRelease = UpdRelease {
-            name: String::from("termscp 0.7.0"),
+            name: String::from("sidemirror 0.7.0"),
             version: String::from("0.7.0"),
             date: String::from("2021-09-12T00:00:00Z"),
             body: Some(String::from("fixed everything")),
@@ -289,7 +304,7 @@ mod test {
     #[test]
     fn should_default_release_body_when_missing() {
         let release: UpdRelease = UpdRelease {
-            name: String::from("termscp 0.7.0"),
+            name: String::from("sidemirror 0.7.0"),
             version: String::from("0.7.0"),
             date: String::from("2021-09-12T00:00:00Z"),
             body: None,
@@ -334,13 +349,13 @@ mod test {
     #[test]
     fn should_accept_release_when_version_is_newer() {
         let release = Release {
-            version: String::from("termscp-999.0.0"),
+            version: String::from("sidemirror-999.0.0"),
             body: String::from("notes"),
         };
 
         let release = Update::check_version(release).unwrap();
 
-        assert_eq!(release.version.as_str(), "termscp-999.0.0");
+        assert_eq!(release.version.as_str(), "sidemirror-999.0.0");
         assert_eq!(release.body.as_str(), "notes");
     }
 
