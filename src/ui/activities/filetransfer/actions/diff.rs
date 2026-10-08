@@ -55,7 +55,9 @@ impl FileTransferActivity {
         if local.is_dir() || remote.is_dir() {
             return Err("File diff is available for regular text files only".to_string());
         }
-        if local.metadata().size > MAX_DIFF_BYTES || remote.metadata().size > MAX_DIFF_BYTES {
+        if local.metadata().size.is_some_and(|size| size > MAX_DIFF_BYTES)
+            || remote.metadata().size.is_some_and(|size| size > MAX_DIFF_BYTES)
+        {
             return Err(format!(
                 "File diff supports files up to {} MiB",
                 MAX_DIFF_BYTES / 1024 / 1024
