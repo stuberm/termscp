@@ -5,6 +5,7 @@ pub mod filesystem;
 pub mod profiles;
 #[cfg(test)]
 mod stream_tests;
+mod syntax;
 pub mod text;
 pub mod worker;
 

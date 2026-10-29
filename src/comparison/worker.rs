@@ -51,6 +51,14 @@ enum Command {
         path: PathBuf,
         cancel: Arc<AtomicBool>,
     },
+    Copy {
+        id: u64,
+        path: PathBuf,
+        view: Box<TextView>,
+        selected: usize,
+        to_right: bool,
+        whole: bool,
+    },
     Quit,
 }
 
@@ -112,6 +120,40 @@ impl Worker {
             while let Ok(command) = requests.recv() {
                 match command {
                     Command::Quit => break,
+                    Command::Copy {
+                        id,
+                        path,
+                        view,
+                        selected,
+                        to_right,
+                        whole,
+                    } => {
+                        let result = (|| {
+                            let cancel = AtomicBool::new(false);
+                            let a = text::read_text(left.as_mut(), &path, &cancel)?;
+                            let b = text::read_text(right.as_mut(), &path, &cancel)?;
+                            if a.bytes != view.left_document.bytes
+                                || b.bytes != view.right_document.bytes
+                            {
+                                return Err(
+                                    "File changed since opening the diff; reopen it before copying"
+                                        .into(),
+                                );
+                            }
+                            let merged = view.merged_bytes(selected, to_right, whole)?;
+                            if to_right {
+                                right.write_bytes(&path, &merged)?;
+                            } else {
+                                left.write_bytes(&path, &merged)?;
+                            }
+                            let a = text::read_text(left.as_mut(), &path, &cancel)?;
+                            let b = text::read_text(right.as_mut(), &path, &cancel)?;
+                            Ok(text::diff_documents(path.display().to_string(), a, b))
+                        })();
+                        if events.send(Event::Text { id, view: result }).is_err() {
+                            break;
+                        }
+                    }
                     Command::Scan {
                         id,
                         cancel,
@@ -134,7 +176,7 @@ impl Worker {
                             if cancel.load(Ordering::Relaxed) {
                                 return Err("Diff cancelled".into());
                             }
-                            Ok(text::diff(path.display().to_string(), &a, &b))
+                            Ok(text::diff_documents(path.display().to_string(), a, b))
                         })();
                         if events.send(Event::Text { id, view }).is_err() {
                             break;
@@ -148,6 +190,27 @@ impl Worker {
             events: responses,
             cancel,
         }
+    }
+
+    pub fn copy(
+        &self,
+        id: u64,
+        path: PathBuf,
+        view: TextView,
+        selected: usize,
+        to_right: bool,
+        whole: bool,
+    ) -> Result<(), String> {
+        self.commands
+            .send(Command::Copy {
+                id,
+                path,
+                view: Box::new(view),
+                selected,
+                to_right,
+                whole,
+            })
+            .map_err(|_| "Connection worker stopped".into())
     }
 
     pub fn cancel(&self) {
@@ -468,6 +531,33 @@ mod tests {
             }
             _ => panic!("expected diff"),
         }
+        let snapshot = text::diff("file".into(), "old\n", "new\n");
+        std::fs::write(b.path().join("file"), "external\n").unwrap();
+        worker
+            .copy(20, "file".into(), snapshot, 0, true, false)
+            .unwrap();
+        match worker.events.recv_timeout(Duration::from_secs(5)).unwrap() {
+            Event::Text { view, .. } => assert!(view.unwrap_err().contains("changed since")),
+            _ => panic!("expected stale snapshot error"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(b.path().join("file")).unwrap(),
+            "external\n"
+        );
+        let snapshot = text::diff("file".into(), "old\n", "external\n");
+        worker
+            .copy(21, "file".into(), snapshot, 0, true, false)
+            .unwrap();
+        match worker.events.recv_timeout(Duration::from_secs(5)).unwrap() {
+            Event::Text { view, .. } => {
+                assert!(view.unwrap().lines.iter().all(|line| !line.changed))
+            }
+            _ => panic!("expected copied diff"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(b.path().join("file")).unwrap(),
+            "old\n"
+        );
         worker.refresh(3, vec!["file".into()]).unwrap();
         loop {
             if let Event::Finished { id, rows, .. } =

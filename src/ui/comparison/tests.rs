@@ -226,6 +226,7 @@ fn app(directory: &std::path::Path) -> App {
         keyring: false,
         prompt_password: false,
         quit: false,
+        pending_copy: None,
     }
 }
 
@@ -702,4 +703,99 @@ fn remote_password_prompts_are_separate_and_never_saved() {
     assert!(app.store.profiles.is_empty());
     let serialized = serde_json::to_string(&profile).unwrap();
     assert!(!serialized.contains("secret"));
+}
+
+#[test]
+fn enter_opens_file_diff_even_while_folder_scan_is_busy() {
+    use crate::comparison::{
+        Row, Status,
+        filesystem::{Entry, Kind},
+    };
+    use std::time::{Duration, Instant};
+    let root = tempfile::tempdir().unwrap();
+    let left = root.path().join("left");
+    let right = root.path().join("right");
+    std::fs::create_dir_all(&left).unwrap();
+    std::fs::create_dir_all(&right).unwrap();
+    std::fs::write(left.join("file"), "old\n").unwrap();
+    std::fs::write(right.join("file"), "new\n").unwrap();
+    let mut app = app(root.path());
+    app.open(
+        Profile::new(
+            "test".into(),
+            left.to_str().unwrap(),
+            right.to_str().unwrap(),
+            vec![],
+        )
+        .unwrap(),
+    );
+    // Wait for connection establishment before simulating a streamed paired row.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.busy {
+        assert!(Instant::now() < deadline);
+        app.poll_worker();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    // Model an active scan with a paired row already visible.
+    app.busy = true;
+    let entry = Entry {
+        kind: Kind::File,
+        size: None,
+    };
+    app.browser.rows.insert(
+        "file".into(),
+        Row {
+            path: "file".into(),
+            left: Some(entry.clone()),
+            right: Some(entry),
+            status: Status::Pending,
+            detail: String::new(),
+            aggregate_base: None,
+        },
+    );
+    app.browser.rebuild();
+    assert!(app.busy);
+    press(&mut app, KeyCode::Enter);
+    assert!(app.loading_diff);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.busy {
+        assert!(
+            Instant::now() < deadline,
+            "diff should open after scan interruption"
+        );
+        app.poll_worker();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        matches!(&app.mode, Mode::Diff { view, .. } if view.left == "old\n" && view.right == "new\n")
+    );
+}
+
+#[test]
+fn diff_function_keys_select_copy_direction_and_scope() {
+    let root = tempfile::tempdir().unwrap();
+    let mut app = app(root.path());
+    app.mode = Mode::Diff {
+        view: crate::comparison::text::diff("test".into(), "a\nold\nb\nold\n", "a\nnew\nb\nnew\n"),
+        selected: 1,
+    };
+    for (key, expected) in [
+        (5, (true, false)),
+        (6, (false, false)),
+        (7, (true, true)),
+        (8, (false, true)),
+    ] {
+        press(&mut app, KeyCode::F(key));
+        assert_eq!(app.pending_copy, Some(expected));
+        press(&mut app, KeyCode::Esc);
+        assert!(app.pending_copy.is_none());
+    }
+    press(&mut app, KeyCode::Char('n'));
+    assert!(matches!(app.mode, Mode::Diff { selected: 3, .. }));
+    press(&mut app, KeyCode::Char('p'));
+    assert!(matches!(app.mode, Mode::Diff { selected: 1, .. }));
+    for old_key in ['<', '>', '{', '}'] {
+        press(&mut app, KeyCode::Char(old_key));
+        assert!(app.pending_copy.is_none());
+    }
 }

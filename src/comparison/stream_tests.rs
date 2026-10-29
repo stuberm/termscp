@@ -121,7 +121,7 @@ fn finalizes_first_stream_when_second_open_fails_and_both_when_cancelled() {
 
 #[test]
 fn text_read_finalizes_even_on_encoding_errors() {
-    let mut fs = FakeFs::new(&[255]);
+    let mut fs = FakeFs::new(&[0xef, 0xbb, 0xbf, 255]);
     assert!(text::read_text(&mut fs, Path::new("file"), &AtomicBool::new(false)).is_err());
     assert_eq!(fs.finishes.load(Ordering::Relaxed), 1);
 }

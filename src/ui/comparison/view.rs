@@ -113,9 +113,9 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         .map(|profile| profile.name.as_str())
         .unwrap_or("Profiles");
     let roots = app.profile.as_ref().map(|profile| format!("SOURCE      {}\nDESTINATION {}", safe(&profile.source.description()), safe(&profile.destination.description())))
-        .unwrap_or_else(|| "Create a folder comparison: select source and destination\nEither endpoint may be local or remote; comparisons are read-only".into());
+        .unwrap_or_else(|| "Create a folder comparison: select source and destination\nEither endpoint may be local or remote; copying in file diff requires confirmation".into());
     frame.render_widget(
-        Paragraph::new(roots).block(block(format!(" sidemirror / {} / READ ONLY ", safe(name)))),
+        Paragraph::new(roots).block(block(format!(" sidemirror / {} / COMPARE ", safe(name)))),
         areas[0],
     );
     match &app.mode {
@@ -127,19 +127,52 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
                 .iter()
                 .skip(offset)
                 .take(height.max(1))
-                .map(|line| {
-                    let value = |side: &Option<(usize, String)>| {
-                        side.as_ref()
-                            .map(|(number, text)| format!("{number:>5}  {}", safe(text)))
-                            .unwrap_or_default()
+                .enumerate()
+                .map(|(index, line)| {
+                    let in_chunk = line.changed
+                        && view.lines
+                            [(offset + index).min(*selected)..=(offset + index).max(*selected)]
+                            .iter()
+                            .all(|line| line.changed);
+                    let value = |side: &Option<(usize, String)>, left: bool| {
+                        let Some((number, text)) = side else {
+                            return Line::default();
+                        };
+                        let highlights = if left {
+                            &view.highlights.left
+                        } else {
+                            &view.highlights.right
+                        };
+                        let mut spans = vec![Span::styled(
+                            format!("{number:>5}  "),
+                            Style::default().fg(Color::DarkGray),
+                        )];
+                        if let Some(tokens) = highlights.get(number.saturating_sub(1)) {
+                            spans.extend(tokens.iter().map(|token| {
+                                Span::styled(
+                                    safe(&token.text),
+                                    Style::default().fg(Color::Rgb(
+                                        token.color[0],
+                                        token.color[1],
+                                        token.color[2],
+                                    )),
+                                )
+                            }));
+                        } else {
+                            spans.push(Span::raw(safe(text)));
+                        }
+                        Line::from(spans)
                     };
                     TableRow::new(vec![
-                        Cell::from(value(&line.left)),
-                        Cell::from(if line.changed { "≠" } else { " " }),
-                        Cell::from(value(&line.right)),
+                        Cell::from(value(&line.left, true)),
+                        Cell::from(if line.changed { "≠" } else { " " })
+                            .style(Style::default().fg(Color::Yellow)),
+                        Cell::from(value(&line.right, false)),
                     ])
-                    .style(if line.changed {
-                        Style::default().fg(Color::Yellow)
+                    .style(if in_chunk {
+                        Style::default().bg(Color::DarkGray)
+                    } else if line.changed {
+                        Style::default().bg(Color::Rgb(48, 36, 30))
                     } else {
                         Style::default()
                     })
@@ -153,8 +186,12 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
                 ],
             )
             .header(
-                TableRow::new(["SOURCE", "", "DESTINATION"])
-                    .style(Style::default().add_modifier(Modifier::BOLD)),
+                TableRow::new([
+                    format!("SOURCE · {}", view.left_document.encoding.label()),
+                    String::new(),
+                    format!("DESTINATION · {}", view.right_document.encoding.label()),
+                ])
+                .style(Style::default().add_modifier(Modifier::BOLD)),
             )
             .block(block(format!(" Text diff: {} ", safe(&view.title))))
             .row_highlight_style(Style::default().bg(Color::DarkGray));
@@ -178,7 +215,9 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         Mode::Password { .. } => {
             "Enter connect · Esc cancel · password saved in OS keychain after successful login"
         }
-        Mode::Diff { .. } => "↑↓/jk scroll  PgUp/PgDn  Home/End  n/p next/previous hunk  Esc back",
+        Mode::Diff { .. } => {
+            "↑↓/jk scroll  PgUp/PgDn  Home/End  n/p hunk  F5 →/F6 ← chunk  F7 →/F8 ← file  Esc back"
+        }
         Mode::Help => "Press any key to return",
         Mode::Browse => {
             "↑↓/jk select  Enter open  ←/Backspace parent  d all/differences  f recursive  n/p difference\ni ignore selected  r refresh  c cancel  o profiles  s save/edit  a password/reconnect  ? help  q quit"
@@ -213,7 +252,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         ),
         Mode::Help => dialog(
             frame,
-            "Read-only folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh; c: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect.\nSymlinks/special files are not followed or verified.\nMatching bytes, not timestamps, determine regular-file equality.\nText diff supports UTF-8 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
+            "Folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh; c: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect.\nSymlinks/special files are not followed or verified.\nMatching bytes, not timestamps, determine regular-file equality.\nText diff supports UTF-8 / Windows-1252 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
             " Keyboard help ",
         ),
         _ => {}
@@ -646,6 +685,7 @@ mod tests {
             keyring: false,
             prompt_password: false,
             quit: false,
+            pending_copy: None,
         };
         for (name, kind, status) in [
             ("same-file", Kind::File, Status::Equal),
@@ -719,6 +759,7 @@ mod tests {
             keyring: false,
             prompt_password: false,
             quit: false,
+            pending_copy: None,
         };
         let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
         terminal.draw(|frame| draw(frame, &app)).unwrap();
@@ -773,6 +814,7 @@ mod tests {
             keyring: false,
             prompt_password: false,
             quit: false,
+            pending_copy: None,
         };
         for (width, height) in [(160, 40), (80, 24), (40, 12), (1, 1)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -869,6 +911,7 @@ mod tests {
             keyring: false,
             prompt_password: false,
             quit: false,
+            pending_copy: None,
         };
         for (width, height) in [(100, 30), (20, 8), (1, 1)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

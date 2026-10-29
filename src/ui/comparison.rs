@@ -1,4 +1,4 @@
-//! Dedicated, read-only comparison UI. Transfer commands are deliberately absent.
+//! Folder comparison and confirmed bidirectional text merging.
 mod editor;
 mod state;
 #[cfg(test)]
@@ -83,6 +83,7 @@ struct App {
     keyring: bool,
     prompt_password: bool,
     quit: bool,
+    pending_copy: Option<(bool, bool)>,
 }
 
 pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -142,6 +143,7 @@ pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::E
         keyring,
         prompt_password: args.password_prompt,
         quit: false,
+        pending_copy: None,
     };
     if let Some(profile) = initial {
         app.open(profile);
@@ -268,7 +270,7 @@ impl App {
         self.loading_diff = false;
         self.mode = Mode::Browse;
         self.message =
-            "Connecting / scanning — c to cancel; comparison never writes to either side".into();
+            "Connecting / scanning — c to cancel; Enter opens file diff; copying requires confirmation".into();
     }
 
     fn poll_worker(&mut self) {
@@ -338,7 +340,7 @@ impl App {
                             let selected =
                                 view.lines.iter().position(|line| line.changed).unwrap_or(0);
                             self.mode = Mode::Diff { view, selected };
-                            self.message = "Read-only diff · ␍ marks CRLF · [no final newline] marks unterminated lines".into();
+                            self.message = "Diff · ␍ marks CRLF · [no final newline] marks an unterminated line".into();
                         }
                         Err(error) => {
                             self.mode = Mode::Browse;
@@ -366,6 +368,37 @@ impl App {
     }
 
     fn key(&mut self, key: KeyEvent) {
+        if let Some((to_right, whole)) = self.pending_copy.take() {
+            if key.code == KeyCode::Char('y') {
+                if let Mode::Diff { view, selected } = &self.mode
+                    && let Some(worker) = &self.worker
+                    && let Some(row) = self.browser.selected_row()
+                {
+                    self.generation += 1;
+                    match worker.copy(
+                        self.generation,
+                        row.path.clone(),
+                        view.clone(),
+                        *selected,
+                        to_right,
+                        whole,
+                    ) {
+                        Ok(()) => {
+                            self.busy = true;
+                            self.message = "Copying — do not close until complete".into();
+                        }
+                        Err(error) => self.message = error,
+                    }
+                }
+            } else {
+                self.message = "Copy cancelled".into();
+            }
+            return;
+        }
+        if self.busy && matches!(self.mode, Mode::Diff { .. }) {
+            return;
+        }
+
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.quit = true;
             return;
@@ -585,9 +618,31 @@ impl App {
                 _ => {}
             },
             Mode::Diff { view, selected } => match key.code {
+                KeyCode::F(direction @ 5..=8) => {
+                    let whole = matches!(direction, 7 | 8);
+                    if !whole && !view.lines.get(*selected).is_some_and(|line| line.changed) {
+                        self.message = "Select a changed chunk first (n/p)".into();
+                    } else {
+                        let to_right = matches!(direction, 5 | 7);
+                        self.pending_copy = Some((to_right, whole));
+                        self.message = format!(
+                            "Overwrite {} {}? y confirm / any other key cancel. Remote writes are not atomic.",
+                            if to_right {
+                                "RIGHT from LEFT"
+                            } else {
+                                "LEFT from RIGHT"
+                            },
+                            if whole {
+                                "entire file"
+                            } else {
+                                "selected chunk"
+                            }
+                        );
+                    }
+                }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     self.mode = Mode::Browse;
-                    self.message = "Read-only folder comparison".into();
+                    self.refresh();
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     *selected = (*selected + 1).min(view.lines.len().saturating_sub(1))
@@ -771,14 +826,14 @@ impl App {
                 if let Some(row) = self.browser.selected_row().cloned() {
                     if row.is_directory() {
                         self.browser.enter(&row.path);
-                    } else if row.is_file_pair() && !self.busy {
+                    } else if row.is_file_pair() && !self.loading_diff {
                         self.generation += 1;
                         if let Some(worker) = &mut self.worker {
                             match worker.diff(self.generation, row.path) {
                                 Ok(()) => {
                                     self.busy = true;
                                     self.loading_diff = true;
-                                    self.message = "Loading read-only diff — Esc to cancel".into();
+                                    self.message = "Opening file diff (interrupting folder scan if active) — Esc to cancel".into();
                                 }
                                 Err(error) => self.message = error,
                             }

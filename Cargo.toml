@@ -78,6 +78,8 @@ shellexpand = "3"
 simplelog = "0.12"
 similar = "2"
 url = "2"
+encoding_rs = "0.8"
+syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 percent-encoding = "2"
 ssh2-config = "0.8"
 tempfile = "3"

@@ -1,4 +1,4 @@
-//! Minimal read-only interface: comparison cannot create, delete or write files.
+//! Filesystem access for scanning and explicitly confirmed text replacement.
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,9 @@ pub struct Entry {
 pub trait CompareFs {
     fn list(&mut self, relative: &Path) -> Result<Vec<(OsString, Entry)>, String>;
     fn open(&mut self, relative: &Path) -> Result<HostReader, String>;
+    fn write_bytes(&mut self, _relative: &Path, _bytes: &[u8]) -> Result<(), String> {
+        Err("Writing is unsupported by this filesystem".into())
+    }
 }
 
 pub struct LocalFs {
@@ -35,6 +38,30 @@ impl LocalFs {
 }
 
 impl CompareFs for LocalFs {
+    fn write_bytes(&mut self, relative: &Path, bytes: &[u8]) -> Result<(), String> {
+        use std::io::Write;
+        let path = self.root.join(relative);
+        if !fs::symlink_metadata(&path)
+            .map_err(|e| e.to_string())?
+            .is_file()
+        {
+            return Err("Target is no longer a regular file".into());
+        }
+        let permissions = fs::metadata(&path)
+            .map_err(|e| e.to_string())?
+            .permissions();
+        let mut temporary = tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent")?)
+            .map_err(|e| e.to_string())?;
+        temporary.write_all(bytes).map_err(|e| e.to_string())?;
+        temporary
+            .as_file()
+            .set_permissions(permissions)
+            .map_err(|e| e.to_string())?;
+        temporary.as_file().sync_all().map_err(|e| e.to_string())?;
+        temporary.persist(&path).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn list(&mut self, relative: &Path) -> Result<Vec<(OsString, Entry)>, String> {
         let path = self.root.join(relative);
         // Do not traverse a directory replaced by a symlink since discovery.
@@ -88,6 +115,22 @@ pub struct RemoteFs {
 }
 
 impl CompareFs for RemoteFs {
+    fn write_bytes(&mut self, relative: &Path, bytes: &[u8]) -> Result<(), String> {
+        use std::io::Write;
+        let path = self.root.join(relative);
+        let file = self.host.stat(&path).map_err(|e| e.to_string())?;
+        if !file.is_file() || file.metadata().symlink.is_some() {
+            return Err("Target is no longer a regular file".into());
+        }
+        let mut writer = self
+            .host
+            .create_file(&path, file.metadata())
+            .map_err(|e| e.to_string())?;
+        let result = writer.write_all(bytes).map_err(|e| e.to_string());
+        let finish = self.host.finalize_write(writer).map_err(|e| e.to_string());
+        result.and(finish)
+    }
+
     fn list(&mut self, relative: &Path) -> Result<Vec<(OsString, Entry)>, String> {
         let path = self.root.join(relative);
         let directory = self.host.stat(&path).map_err(|error| error.to_string())?;

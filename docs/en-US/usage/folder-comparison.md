@@ -37,7 +37,7 @@ Source and destination each support local or remote folders, including **remote�
 
 Select a saved comparison and press Enter to reopen it. Press `e` in the home screen, or `s` inside a comparison, to edit settings. Saving **updates that same profile and immediately reopens it** with the changed endpoints/rules. Renaming updates the profile atomically rather than creating a duplicate. Names cannot collide with another saved comparison. `d` in the home screen deletes a profile after confirmation; it never deletes endpoint files.
 
-Source/destination labels identify the two columns only: comparison is read-only and does not copy or synchronize in either direction. The inherited transfer/connection-bookmark screen remains available through `sidemirror transfer`.
+Source/destination labels identify the two columns only: folder scanning is read-only; the file diff supports confirmed copying in either direction. The inherited transfer/connection-bookmark screen remains available through `sidemirror transfer`.
 
 Press `o` in the comparison screen to return to the saved comparison list. At the root list, Escape quits; it does not reopen the previous comparison. Inside a profile folder, Escape returns to the root list.
 
@@ -127,4 +127,10 @@ Entries appear incrementally as each folder listing returns, first on the source
 
 Worker-owned connections keep keyboard navigation responsive. Cancellation is cooperative: blocked connection/list/read/finalization calls must return before cancellation takes effect. Old job results cannot replace the current session.
 
-Text diff is read-only and supports UTF-8 files up to 5 MiB and 10,000 lines per side. Binary/non-UTF-8 files retain folder byte-comparison results but cannot open as text. `␍` marks CRLF; `[no final newline]` marks an unterminated final line. No copy, merge, deletion, synchronization, or arbitrary remote command execution is available in comparison view. SCP and Kubernetes may run read-only listing/stat/read commands internally through their inherited backends.
+Text diff supports UTF-8 and Windows-1252 files up to 5 MiB and 10,000 lines per side. Binary files retain folder byte-comparison results but cannot open as text. `␍` marks CRLF; `[no final newline]` marks an unterminated final line. In file diff, use `n`/`p` to select a changed chunk, `F5` to copy it left → right, or `F6` right → left. Use `F7` / `F8` to copy the entire file left → right / right → left. Confirm with `y`; any other key cancels. Copies write immediately and reload the diff; Escape returns and rescans folders. Both snapshots are checked before writing; stale files must be reopened. Local replacement is atomic and retains permissions; remote writes are not atomic and failures may leave partial contents. Concurrent changes during writing cannot be prevented. Only existing paired regular text files are supported; deletion, automatic synchronization, and arbitrary remote command execution are unavailable. SCP and Kubernetes may run read-only listing/stat/read commands internally through their inherited backends.
+
+Opening a paired file with Enter interrupts an active folder scan; it does not wait for the entire folder comparison. A currently blocked remote I/O operation must return first. Returning from the diff rescans the folders.
+
+Text decoding uses UTF-8 first (preserving BOM), then Windows-1252 as a fallback, not general-purpose encoding detection. ASCII-only files are treated as UTF-8. Each column shows its encoding. Chunks retain the destination encoding and reject unrepresentable characters; whole-file copies retain the source bytes and encoding. Decoded text may be identical even when folder byte comparison reports different encodings.
+
+Both file panes use filename-based syntax highlighting with a dark palette. Multiline comments and strings retain their syntax state. Unknown file types fall back to plain text. Changed chunks have a tinted background and the selected chunk is highlighted separately; syntax colors do not replace difference indicators. Highlighting is cached when opening or reloading a diff.
