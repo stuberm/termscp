@@ -2,6 +2,68 @@ use super::*;
 use crate::comparison::profiles::Endpoint;
 
 #[test]
+fn settings_themes_apply_persist_and_return_to_previous_selection() {
+    let root = tempfile::tempdir().unwrap();
+    let mut app = app(root.path());
+    app.mode = Mode::Profiles { selected: 7 };
+    press(&mut app, KeyCode::F(4));
+    assert!(matches!(app.mode, Mode::Settings { themes: false, .. }));
+    press(&mut app, KeyCode::Enter);
+    assert!(matches!(
+        app.mode,
+        Mode::Settings {
+            themes: true,
+            selected: 0,
+            ..
+        }
+    ));
+    press(&mut app, KeyCode::Down);
+    assert_eq!(app.theme.theme, Theme::CatppuccinMocha); // Selection alone does not apply.
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(app.theme.theme, Theme::TokyoNight);
+    assert_eq!(
+        ThemeSettings::load(root.path().join("comparison-ui.json")).theme,
+        Theme::TokyoNight
+    );
+    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Profiles { selected: 7 }));
+    press(&mut app, KeyCode::F(4));
+    press(&mut app, KeyCode::Enter);
+    assert!(matches!(app.mode, Mode::Settings { selected: 1, .. }));
+    press(&mut app, KeyCode::Up);
+    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Esc);
+    assert_eq!(app.theme.theme, Theme::TokyoNight); // Esc cancels an unapplied selection.
+    app.mode = Mode::Browse;
+    press(&mut app, KeyCode::F(4));
+    press(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Browse));
+}
+
+#[test]
+fn settings_cancels_pending_diff_load_and_preserves_open_diff_on_return() {
+    let root = tempfile::tempdir().unwrap();
+    let mut app = app(root.path());
+    app.mode = Mode::Browse;
+    app.loading_diff = true;
+    app.busy = true;
+    let generation = app.generation;
+    press(&mut app, KeyCode::F(4));
+    assert!(!app.loading_diff);
+    assert!(!app.busy);
+    assert!(app.generation > generation); // Late worker results cannot replace Settings.
+    press(&mut app, KeyCode::Esc);
+    app.mode = Mode::Diff {
+        view: crate::comparison::text::diff("test.rs".into(), "a\n", "b\n"),
+        selected: 1,
+    };
+    press(&mut app, KeyCode::F(4));
+    press(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Diff { selected: 1, .. }));
+}
+
+#[test]
 fn folders_duplicate_and_move_profiles_without_touching_endpoints() {
     let root = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();
@@ -211,8 +273,9 @@ fn move_picker_selects_current_folder_and_can_cancel_or_return_to_root() {
     assert_eq!(app.store.folder_of("Keep"), Some("Alpha"));
 }
 
-fn app(directory: &std::path::Path) -> App {
+pub(super) fn app(directory: &std::path::Path) -> App {
     App {
+        theme: ThemeSettings::load(directory.join("comparison-ui.json")),
         browser: Browser::default(),
         store: ProfileStore::load(directory.join("comparisons.json")).unwrap(),
         home_folder: None,

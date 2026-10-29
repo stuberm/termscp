@@ -1,7 +1,36 @@
 # Themes
 
-sidemirror lets you set the colors for several components in the application. There
-are two ways to customize sidemirror:
+## Folder comparison themes
+
+The default comparison workflow uses **Catppuccin Mocha**, based on the
+[official Catppuccin palette](https://catppuccin.com/palette/). Press **F4** from
+saved comparisons, folder browsing, or an idle text diff to open **Settings**,
+then press Enter on **Themes**. Use Up/Down or j/k to choose **Catppuccin Mocha**,
+**Tokyo Night** (the Default variant), or **Terminal default**, and Enter to apply and save. Escape goes back without
+applying an unconfirmed selection; Escape again returns to the previous screen.
+
+The theme covers comparison screens, input fields, dialogs, status colors,
+selection and changed-chunk backgrounds, and syntax highlighting. Status labels
+remain visible independently of color. The choice is stored atomically in
+`comparison-ui.json` in the sidemirror configuration directory (`theme` is
+`catppuccin-mocha`, `tokyo-night`, or `terminal`). Missing, invalid, or unknown settings fall back
+to Mocha. The terminal option uses terminal colors for the UI and retains the
+original dark syntax palette.
+
+Tokyo Night follows the [terminalcolors.com Default palette](https://terminalcolors.com/themes/tokyo-night/):
+background `#1a1b26`, text `#c0caf5`, selection background `#283457`, and blue accent
+`#7aa2f7`. Muted text uses ANSI white `#a9b1d6`, borders use bright black `#414868`,
+and unselected changed chunks use black `#15161e`. Syntax colors use the same
+terminal palette rather than Neovim-specific additions.
+
+## Transfer interface themes
+
+The inherited `sidemirror transfer` interface uses separate `theme.toml` settings.
+The following configuration and theme-import instructions apply to that interface
+only; they do not change comparison themes.
+
+sidemirror lets you set the colors for several components in the transfer interface. There
+are two ways to customize it:
 
 - From the **configuration menu**
 - Importing a **theme file**

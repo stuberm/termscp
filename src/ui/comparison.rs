@@ -3,6 +3,7 @@ mod editor;
 mod state;
 #[cfg(test)]
 mod tests;
+mod theme;
 mod view;
 
 use std::collections::BTreeMap;
@@ -27,6 +28,7 @@ use crate::comparison::{ScanEvent, Status};
 use crate::system::environment;
 use editor::Editor;
 use state::Browser;
+use theme::{Theme, ThemeSettings};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -42,6 +44,11 @@ enum HomeEntry {
 }
 
 enum Mode {
+    Settings {
+        previous: Box<Mode>,
+        themes: bool,
+        selected: usize,
+    },
     CreateFolder {
         value: String,
     },
@@ -70,6 +77,7 @@ enum Mode {
 }
 
 struct App {
+    theme: ThemeSettings,
     browser: Browser,
     store: ProfileStore,
     home_folder: Option<String>,
@@ -127,6 +135,7 @@ pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::E
         }
     };
     let mut app = App {
+        theme: ThemeSettings::load(config.join("comparison-ui.json")),
         browser: Browser {
             differences_only: args.differences,
             ..Browser::default()
@@ -403,7 +412,50 @@ impl App {
             self.quit = true;
             return;
         }
+        if key.code == KeyCode::F(4)
+            && matches!(
+                self.mode,
+                Mode::Browse | Mode::Profiles { .. } | Mode::Diff { .. }
+            )
+        {
+            self.cancel_diff();
+            let previous = Box::new(std::mem::replace(&mut self.mode, Mode::Browse));
+            self.mode = Mode::Settings {
+                previous,
+                themes: false,
+                selected: Theme::ALL
+                    .iter()
+                    .position(|theme| *theme == self.theme.theme)
+                    .unwrap_or(0),
+            };
+            return;
+        }
         match &mut self.mode {
+            Mode::Settings {
+                previous,
+                themes,
+                selected,
+            } => match key.code {
+                KeyCode::Esc if *themes => *themes = false,
+                KeyCode::Esc => {
+                    self.mode = *std::mem::replace(previous, Box::new(Mode::Browse));
+                }
+                KeyCode::Down | KeyCode::Char('j') if *themes => {
+                    *selected = (*selected + 1).min(Theme::ALL.len() - 1);
+                }
+                KeyCode::Up | KeyCode::Char('k') if *themes => {
+                    *selected = selected.saturating_sub(1);
+                }
+                KeyCode::Enter if !*themes => *themes = true,
+                KeyCode::Enter => {
+                    let theme = Theme::ALL[*selected];
+                    self.message = match self.theme.apply(theme) {
+                        Ok(()) => format!("Theme saved: {}", theme.name()),
+                        Err(error) => format!("Could not save theme: {error}"),
+                    };
+                }
+                _ => {}
+            },
             Mode::Browse => self.browse_key(key.code),
             Mode::Profiles { selected } => {
                 let entries = Self::home_entries(&self.store, self.home_folder.as_deref());

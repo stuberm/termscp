@@ -19,17 +19,17 @@ Passwords and S3 secret access keys entered for either endpoint are always saved
 
 Both endpoints offer the inherited termscp settings:
 
-| Type | Settings |
-| --- | --- |
-| Local | Folder |
-| SFTP / SCP / FTP / FTPS | Host or SSH alias, port, username, masked password, folder |
-| S3 | Bucket, region, endpoint, AWS profile, access key ID, masked secret access key/security token/session token, path-style addressing, folder prefix |
-| GCS | Bucket, endpoint, service-account JSON file (blank uses ADC), folder prefix |
-| Kubernetes | Namespace, cluster URL, username, certificate/key file paths, folder (`/pod/container/path`, or `/` to list pods) |
-| WebDAV | HTTP(S) URI, username, masked password, folder |
-| SMB | Host, username, masked password, share, folder; POSIX also offers port, workgroup and Auto/SMB1/SMB2/SMB3 dialect |
-| URL shortcut | Standard SFTP/SCP/FTP/FTPS or HTTP(S) WebDAV URL, optional session password |
-| Connection bookmark | Saved connection name (optionally `bookmark:NAME`), optional session password/default secret override |
+| Type                    | Settings                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local                   | Folder                                                                                                                                            |
+| SFTP / SCP / FTP / FTPS | Host or SSH alias, port, username, masked password, folder                                                                                        |
+| S3                      | Bucket, region, endpoint, AWS profile, access key ID, masked secret access key/security token/session token, path-style addressing, folder prefix |
+| GCS                     | Bucket, endpoint, service-account JSON file (blank uses ADC), folder prefix                                                                       |
+| Kubernetes              | Namespace, cluster URL, username, certificate/key file paths, folder (`/pod/container/path`, or `/` to list pods)                                 |
+| WebDAV                  | HTTP(S) URI, username, masked password, folder                                                                                                    |
+| SMB                     | Host, username, masked password, share, folder; POSIX also offers port, workgroup and Auto/SMB1/SMB2/SMB3 dialect                                 |
+| URL shortcut            | Standard SFTP/SCP/FTP/FTPS or HTTP(S) WebDAV URL, optional session password                                                                       |
+| Connection bookmark     | Saved connection name (optionally `bookmark:NAME`), optional session password/default secret override                                             |
 
 SMB is offered only in builds with the `smb` feature. Windows manages SMB dialect negotiation; POSIX-only settings are retained but not editable there. SMB1 is insecure and should be limited to isolated legacy devices. URL-based saved profiles expand into full protocol-specific fields when edited.
 
@@ -48,6 +48,16 @@ On the comparison home, select a profile and press `c` to duplicate it. The edit
 Press `f` to create a single-level organizational folder. Enter opens a folder; Backspace or Escape returns to the root list. Select a profile and press `m` to list available folders, including **Root (no folder)**. The current folder is marked and selected. Use Up/Down (or j/k), Home/End, and Enter to move the profile; Escape cancels. New and duplicated profiles are saved in the currently open folder. Renaming retains membership; deleting a profile leaves its folder intact. Select a folder and press `d` to delete it after confirmation (`y` confirms; `n`/Escape cancels). Its profiles return to the root list; no profiles or endpoint files are deleted. Profile names remain globally unique, so CLI `--profile NAME` is unchanged.
 
 These folders organize profiles only and never create, move, or modify endpoint files. Folder names and membership are persisted alongside profiles in `comparisons.json`; older files without folders still load.
+
+## Appearance
+
+The comparison UI defaults to **Catppuccin Mocha**. From the home screen, folder
+browser, or idle text diff, press **F4** → **Themes**, select a theme with Up/Down
+or j/k, then Enter to apply and save. **Tokyo Night** (terminalcolors.com Default palette) and
+**Terminal default** are also available.
+Escape returns to Settings, then to the previous screen without losing its
+selection. This preference is separate from comparison profiles and the legacy
+transfer theme. See [Themes](../configuration/themes.md) for storage details.
 
 ## CLI shortcuts
 
@@ -83,23 +93,24 @@ Native keychain entries use readable connection names rather than serialized set
 
 ## Keyboard controls
 
-| Key | Action |
-| --- | --- |
-| Up/Down or k/j | Select a shared source/destination row |
-| Enter / Right | Enter a logical directory pair or open text diff |
-| Left / Backspace | Parent directory |
-| d | Toggle Show: All files & folders / Differences only |
-| f | Direct children / recursive descendant list |
-| n / p | Next / previous non-equal entry, wrapping within the visible list |
-| Page Up/Down, Home/End | Move through rows |
-| i | Ignore the selected file/folder on both sides without restarting comparison |
-| r | Refresh the recursive scan |
-| c / Escape | Cancel after the current I/O operation |
-| o | Return to saved comparisons |
-| s | Edit/save the active comparison |
-| a | Reconnect with separate endpoint password prompts |
-| ? | Keyboard help |
-| q / Ctrl-C | Quit |
+| Key                    | Action                                                                      |
+| ---------------------- | --------------------------------------------------------------------------- |
+| Up/Down or k/j         | Select a shared source/destination row                                      |
+| Enter / Right          | Enter a logical directory pair or open text diff                            |
+| Left / Backspace       | Parent directory                                                            |
+| d                      | Toggle Show: All files & folders / Differences only                         |
+| f                      | Direct children / recursive descendant list                                 |
+| n / p                  | Next / previous non-equal entry, wrapping within the visible list           |
+| Page Up/Down, Home/End | Move through rows                                                           |
+| i                      | Ignore the selected file/folder on both sides without restarting comparison |
+| r                      | Refresh the recursive scan                                                  |
+| c / Escape             | Cancel after the current I/O operation                                      |
+| o                      | Return to saved comparisons                                                 |
+| s                      | Edit/save the active comparison                                             |
+| a                      | Reconnect with separate endpoint password prompts                           |
+| F4                     | Settings → Themes (also on the home screen and in an idle text diff)        |
+| ?                      | Keyboard help                                                               |
+| q / Ctrl-C             | Quit                                                                        |
 
 In text diff, n/p jump between changed hunks and Escape returns to folders.
 
@@ -133,4 +144,4 @@ Opening a paired file with Enter interrupts an active folder scan; it does not w
 
 Text decoding uses UTF-8 first (preserving BOM), then Windows-1252 as a fallback, not general-purpose encoding detection. ASCII-only files are treated as UTF-8. Each column shows its encoding. Chunks retain the destination encoding and reject unrepresentable characters; whole-file copies retain the source bytes and encoding. Decoded text may be identical even when folder byte comparison reports different encodings.
 
-Both file panes use filename-based syntax highlighting with a dark palette. Multiline comments and strings retain their syntax state. Unknown file types fall back to plain text. Changed chunks have a tinted background and the selected chunk is highlighted separately; syntax colors do not replace difference indicators. Highlighting is cached when opening or reloading a diff.
+Both file panes use filename-based syntax highlighting with colors matching the selected theme. Multiline comments and strings retain their syntax state. Unknown file types fall back to plain text. Changed chunks have a tinted background and the selected chunk is highlighted separately; syntax colors do not replace difference indicators. Highlighting is cached when opening or reloading a diff.

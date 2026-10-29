@@ -1,29 +1,34 @@
 use tuirealm::ratatui::Frame;
 use tuirealm::ratatui::layout::{Constraint, Layout, Rect};
-use tuirealm::ratatui::style::{Color, Modifier, Style};
+use tuirealm::ratatui::style::{Modifier, Style};
 use tuirealm::ratatui::text::{Line, Span};
 use tuirealm::ratatui::widgets::{
     Block, Borders, Cell, Clear, Paragraph, Row as TableRow, Table, TableState, Wrap,
 };
 use unicode_width::UnicodeWidthStr;
 
+use super::theme::{Palette, Theme};
 use super::{App, Mode};
 use crate::comparison::Status;
 use crate::comparison::filesystem::{Entry, Kind};
 
-fn status_style(status: Status) -> Style {
+fn status_style(status: Status, palette: Palette) -> Style {
     Style::default().fg(match status {
-        Status::Equal => Color::DarkGray,
-        Status::Different | Status::TypeConflict => Color::Yellow,
-        Status::LeftOnly => Color::Cyan,
-        Status::RightOnly => Color::Magenta,
-        Status::Pending | Status::Unverified => Color::Gray,
-        Status::Error => Color::Red,
+        Status::Equal | Status::Pending | Status::Unverified => palette.muted,
+        Status::Different | Status::TypeConflict => palette.warning,
+        Status::LeftOnly => palette.source,
+        Status::RightOnly => palette.destination,
+        Status::Error => palette.error,
     })
 }
 
-fn block(title: impl Into<String>) -> Block<'static> {
-    Block::default().borders(Borders::ALL).title(title.into())
+fn block(palette: Palette, title: impl Into<String>) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(palette.border))
+        .title_style(Style::default().fg(palette.accent))
+        .style(palette.base())
+        .title(title.into())
 }
 
 /// File names/remote error text can contain terminal control characters. Render them visibly.
@@ -58,6 +63,18 @@ fn file_cell(name: &str, entry: &Option<Entry>) -> String {
 }
 
 pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
+    let palette = app.theme.theme.palette();
+    frame.render_widget(Block::default().style(palette.base()), frame.area());
+    let dialog = |frame: &mut Frame<'_>, message: &str, title: &str| {
+        dialog(frame, message, title, palette);
+    };
+    if let Mode::Settings {
+        themes, selected, ..
+    } = &app.mode
+    {
+        draw_settings(frame, app, *themes, *selected);
+        return;
+    }
     if matches!(
         app.mode,
         Mode::Profiles { .. }
@@ -115,7 +132,10 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
     let roots = app.profile.as_ref().map(|profile| format!("SOURCE      {}\nDESTINATION {}", safe(&profile.source.description()), safe(&profile.destination.description())))
         .unwrap_or_else(|| "Create a folder comparison: select source and destination\nEither endpoint may be local or remote; copying in file diff requires confirmation".into());
     frame.render_widget(
-        Paragraph::new(roots).block(block(format!(" sidemirror / {} / COMPARE ", safe(name)))),
+        Paragraph::new(roots).block(block(
+            palette,
+            format!(" sidemirror / {} / COMPARE ", safe(name)),
+        )),
         areas[0],
     );
     match &app.mode {
@@ -145,17 +165,13 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
                         };
                         let mut spans = vec![Span::styled(
                             format!("{number:>5}  "),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(palette.muted),
                         )];
                         if let Some(tokens) = highlights.get(number.saturating_sub(1)) {
                             spans.extend(tokens.iter().map(|token| {
                                 Span::styled(
                                     safe(&token.text),
-                                    Style::default().fg(Color::Rgb(
-                                        token.color[0],
-                                        token.color[1],
-                                        token.color[2],
-                                    )),
+                                    Style::default().fg(app.theme.theme.syntax_color(token.color)),
                                 )
                             }));
                         } else {
@@ -166,13 +182,13 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
                     TableRow::new(vec![
                         Cell::from(value(&line.left, true)),
                         Cell::from(if line.changed { "≠" } else { " " })
-                            .style(Style::default().fg(Color::Yellow)),
+                            .style(Style::default().fg(palette.warning)),
                         Cell::from(value(&line.right, false)),
                     ])
                     .style(if in_chunk {
-                        Style::default().bg(Color::DarkGray)
+                        Style::default().bg(palette.selection)
                     } else if line.changed {
-                        Style::default().bg(Color::Rgb(48, 36, 30))
+                        Style::default().bg(palette.changed)
                     } else {
                         Style::default()
                     })
@@ -193,8 +209,11 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
                 ])
                 .style(Style::default().add_modifier(Modifier::BOLD)),
             )
-            .block(block(format!(" Text diff: {} ", safe(&view.title))))
-            .row_highlight_style(Style::default().bg(Color::DarkGray));
+            .block(block(
+                palette,
+                format!(" Text diff: {} ", safe(&view.title)),
+            ))
+            .row_highlight_style(Style::default().bg(palette.selection));
             let mut state =
                 TableState::default().with_selected(Some(selected.saturating_sub(offset)));
             frame.render_stateful_widget(table, areas[1], &mut state);
@@ -202,6 +221,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         _ => draw_browser(frame, app, areas[1]),
     }
     let hint = match &app.mode {
+        Mode::Settings { .. } => unreachable!(),
         Mode::CreateFolder { .. } => "Enter create · Esc cancel",
         Mode::MoveProfile { .. } => "↑↓ select folder · Enter move · Esc cancel",
         Mode::DeleteFolder(_) => "y delete folder only · n/Esc cancel",
@@ -224,7 +244,8 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         }
     };
     frame.render_widget(
-        Paragraph::new(format!("{}\n{}", safe(&app.message), hint)).wrap(Wrap { trim: false }),
+        Paragraph::new(format!("{}\n{}\nF4 Settings", safe(&app.message), hint))
+            .wrap(Wrap { trim: false }),
         areas[2],
     );
     match &app.mode {
@@ -252,7 +273,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         ),
         Mode::Help => dialog(
             frame,
-            "Folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh; c: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect.\nSymlinks/special files are not followed or verified.\nMatching bytes, not timestamps, determine regular-file equality.\nText diff supports UTF-8 / Windows-1252 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
+            "Folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh; c: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect; F4: Settings / Themes.\nSymlinks/special files are not followed or verified.\nMatching bytes, not timestamps, determine regular-file equality.\nText diff supports UTF-8 / Windows-1252 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
             " Keyboard help ",
         ),
         _ => {}
@@ -260,8 +281,8 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
 }
 
 fn draw_move_picker(frame: &mut Frame<'_>, app: &App, profile: &str, selected: usize) {
+    let palette = app.theme.theme.palette();
     let area = frame.area();
-    frame.render_widget(Clear, area);
     let areas = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(1),
@@ -298,10 +319,10 @@ fn draw_move_picker(frame: &mut Frame<'_>, app: &App, profile: &str, selected: u
         std::iter::once(root).chain(folders),
         [Constraint::Percentage(80), Constraint::Percentage(20)],
     )
-    .block(block(" Available folders "))
+    .block(block(palette, " Available folders "))
     .row_highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
+            .bg(palette.selection)
             .add_modifier(Modifier::BOLD),
     )
     .highlight_symbol("› ");
@@ -320,10 +341,82 @@ fn draw_move_picker(frame: &mut Frame<'_>, app: &App, profile: &str, selected: u
     );
 }
 
-fn input_style(selected: bool) -> Style {
+fn draw_settings(frame: &mut Frame<'_>, app: &App, themes: bool, selected: usize) {
+    let palette = app.theme.theme.palette();
+    let areas = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(1),
+        Constraint::Length(4),
+    ])
+    .split(frame.area());
+    frame.render_widget(
+        Paragraph::new(if themes {
+            "Settings / Themes"
+        } else {
+            "Settings"
+        })
+        .style(
+            Style::default()
+                .fg(palette.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        areas[0],
+    );
+    let rows = if themes {
+        Theme::ALL
+            .iter()
+            .map(|theme| {
+                TableRow::new(vec![
+                    theme.name(),
+                    if *theme == app.theme.theme {
+                        "Active"
+                    } else {
+                        ""
+                    },
+                ])
+            })
+            .collect::<Vec<_>>()
+    } else {
+        vec![TableRow::new(["Themes", app.theme.theme.name()])]
+    };
+    let table = Table::new(
+        rows,
+        [Constraint::Percentage(70), Constraint::Percentage(30)],
+    )
+    .block(block(
+        palette,
+        if themes { " Themes " } else { " Appearance " },
+    ))
+    .row_highlight_style(
+        Style::default()
+            .bg(palette.selection)
+            .add_modifier(Modifier::BOLD),
+    )
+    .highlight_symbol("› ");
+    frame.render_stateful_widget(
+        table,
+        areas[1],
+        &mut TableState::default().with_selected(Some(if themes { selected } else { 0 })),
+    );
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{}\n{}",
+            safe(&app.message),
+            if themes {
+                "↑↓/jk select · Enter apply and save · Esc back"
+            } else {
+                "Enter open Themes · Esc return"
+            }
+        ))
+        .wrap(Wrap { trim: false }),
+        areas[2],
+    );
+}
+
+fn input_style(selected: bool, palette: Palette) -> Style {
     if selected {
         Style::default()
-            .fg(Color::Cyan)
+            .fg(palette.accent)
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -351,13 +444,20 @@ fn input_tail(text: &str, width: u16, active: bool) -> (String, u16) {
     (text[start..].to_string(), used as u16)
 }
 
-fn draw_input(frame: &mut Frame<'_>, text: &str, area: Rect, title: &str, active: bool) {
-    let border = block(title);
+fn draw_input(
+    frame: &mut Frame<'_>,
+    text: &str,
+    area: Rect,
+    title: &str,
+    active: bool,
+    palette: Palette,
+) {
+    let border = block(palette, title);
     let inner = border.inner(area);
     let (text, cursor) = input_tail(text, inner.width, active);
     frame.render_widget(
         Paragraph::new(text)
-            .style(input_style(active))
+            .style(input_style(active, palette))
             .block(border),
         area,
     );
@@ -367,12 +467,16 @@ fn draw_input(frame: &mut Frame<'_>, text: &str, area: Rect, title: &str, active
 }
 
 fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor) {
+    let palette = app.theme.theme.palette();
     let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(4)]).split(frame.area());
-    let outer = block(if editor.original.is_some() {
-        " Edit comparison · save and open "
-    } else {
-        " New comparison · save and open "
-    });
+    let outer = block(
+        palette,
+        if editor.original.is_some() {
+            " Edit comparison · save and open "
+        } else {
+            " New comparison · save and open "
+        },
+    );
     let inner = outer.inner(areas[0]);
     frame.render_widget(outer, areas[0]);
     let form = Layout::vertical([
@@ -387,6 +491,7 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
         form[0],
         " Comparison name ",
         editor.field == 0,
+        palette,
     );
     let columns =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(form[1]);
@@ -405,14 +510,14 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
         ),
     ] {
         let selected = editor.selected(side);
-        let inner = block(title).inner(area);
+        let inner = block(palette, title).inner(area);
         let lines = endpoint
             .rows()
             .into_iter()
             .enumerate()
             .flat_map(|(index, (label, value))| {
                 let active = selected == Some(index);
-                let style = input_style(active);
+                let style = input_style(active, palette);
                 [
                     Line::styled(label, style),
                     Line::styled(input_tail(&value, inner.width, active).0, style),
@@ -425,7 +530,7 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
         frame.render_widget(
             Paragraph::new(lines)
                 .scroll((scroll as u16, 0))
-                .block(block(title)),
+                .block(block(palette, title)),
             area,
         );
         if let Some(index) = selected {
@@ -443,25 +548,27 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
         form[2],
         " Ignore globs · semicolon-separated ",
         editor.field == editor.ignore_index(),
+        palette,
     );
     frame.render_widget(Paragraph::new(format!("{}\nTab/Shift-Tab fields · F1 name/F2 source/F3 destination · Space/←→ type/options\nPasswords: native OS keychain (required) · Ctrl-U clear · Enter/Ctrl-S save & open · Esc cancel", safe(&app.message)))
         .wrap(Wrap { trim: false }), areas[1]);
 }
 
 fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
+    let palette = app.theme.theme.palette();
     let areas = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(1),
         Constraint::Length(3),
     ])
     .split(frame.area());
-    frame.render_widget(Paragraph::new("sidemirror · Folder comparisons\nChoose a saved comparison or create a new one. Source and destination can each be local or remote."), areas[0]);
+    frame.render_widget(Paragraph::new("sidemirror · Folder comparisons · F4 Settings\nChoose a saved comparison or create a new one. Source and destination can each be local or remote."), areas[0]);
     let new = TableRow::new(vec![
         "+ New comparison".to_string(),
         "Select source…".into(),
         "Select destination…".into(),
     ])
-    .style(Style::default().fg(Color::Cyan));
+    .style(Style::default().fg(palette.accent));
     let entries = App::home_entries(&app.store, app.home_folder.as_deref());
     let profiles = entries.into_iter().skip(1).map(|entry| match entry {
         super::HomeEntry::Folder(name) => TableRow::new(vec![
@@ -469,7 +576,7 @@ fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
             format!("{} profiles", app.store.folders[&name].len()),
             String::new(),
         ])
-        .style(Style::default().fg(Color::Cyan)),
+        .style(Style::default().fg(palette.accent)),
         super::HomeEntry::Profile(name) => {
             let profile = &app.store.profiles[&name];
             TableRow::new(vec![
@@ -492,16 +599,19 @@ fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
         TableRow::new(["COMPARISON", "SOURCE", "DESTINATION"])
             .style(Style::default().add_modifier(Modifier::BOLD)),
     )
-    .block(block(format!(
-        " Saved comparisons / {} ",
-        app.home_folder
-            .as_deref()
-            .map(safe)
-            .unwrap_or_else(|| "All folders".into())
-    )))
+    .block(block(
+        palette,
+        format!(
+            " Saved comparisons / {} ",
+            app.home_folder
+                .as_deref()
+                .map(safe)
+                .unwrap_or_else(|| "All folders".into())
+        ),
+    ))
     .row_highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
+            .bg(palette.selection)
             .add_modifier(Modifier::BOLD),
     );
     frame.render_stateful_widget(
@@ -511,7 +621,7 @@ fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
     );
     frame.render_widget(
         Paragraph::new(format!(
-            "{}\n↑↓ select · Enter open · n new · e edit · c duplicate · f folder · m move · d delete · Backspace/Esc back · q quit",
+            "{}\n↑↓ select · Enter open · n new · e edit · c duplicate · f folder · m move · d delete · Backspace/Esc back · F4 Settings · q quit",
             safe(&app.message)
         ))
         .wrap(Wrap { trim: false }),
@@ -520,6 +630,7 @@ fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
 }
 
 fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let palette = app.theme.theme.palette();
     let sections = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
     let option = |label: &str, selected: bool| {
         Span::styled(
@@ -528,7 +639,7 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
             } else {
                 format!(" {label} ")
             },
-            input_style(selected),
+            input_style(selected, palette),
         )
     };
     frame.render_widget(
@@ -568,7 +679,7 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 Cell::from(row.status.label()),
                 Cell::from(file_cell(&name, &row.right)),
             ])
-            .style(status_style(row.status))
+            .style(status_style(row.status, palette))
         });
     let equal = app
         .browser
@@ -606,10 +717,10 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
         TableRow::new(["SOURCE", "STATUS", "DESTINATION"])
             .style(Style::default().add_modifier(Modifier::BOLD)),
     )
-    .block(block(title))
+    .block(block(palette, title))
     .row_highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
+            .bg(palette.selection)
             .add_modifier(Modifier::BOLD),
     );
     frame.render_stateful_widget(
@@ -628,7 +739,7 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
             height: 1,
         };
         frame.render_widget(
-            Paragraph::new(safe(&row.detail)).style(status_style(row.status)),
+            Paragraph::new(safe(&row.detail)).style(status_style(row.status, palette)),
             detail,
         );
     }
@@ -649,13 +760,13 @@ fn popup(area: Rect, width: u16, height: u16) -> Rect {
     .split(columns[1])[1]
 }
 
-fn dialog(frame: &mut Frame<'_>, message: &str, title: &str) {
+fn dialog(frame: &mut Frame<'_>, message: &str, title: &str, palette: Palette) {
     let area = popup(frame.area(), 85, 75);
     frame.render_widget(Clear, area);
     frame.render_widget(
         Paragraph::new(message)
             .wrap(Wrap { trim: false })
-            .block(block(title)),
+            .block(block(palette, title)),
         area,
     );
 }
@@ -669,6 +780,106 @@ mod tests {
     use tuirealm::ratatui::backend::TestBackend;
 
     #[test]
+    fn themes_color_screens_dialogs_selection_statuses_and_cached_syntax() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = super::super::tests::app(directory.path());
+        for theme in Theme::ALL {
+            app.theme.theme = theme;
+            let palette = theme.palette();
+            let entry = Entry {
+                kind: Kind::File,
+                size: None,
+            };
+            let row = crate::comparison::Row {
+                path: "source-only.rs".into(),
+                left: Some(entry),
+                right: None,
+                status: Status::LeftOnly,
+                detail: String::new(),
+                aggregate_base: None,
+            };
+            app.browser.rows.insert(row.path.clone(), row);
+            app.browser.rebuild();
+            let modes = [
+                Mode::Profiles { selected: 0 },
+                Mode::Settings {
+                    previous: Box::new(Mode::Browse),
+                    themes: false,
+                    selected: 0,
+                },
+                Mode::Settings {
+                    previous: Box::new(Mode::Browse),
+                    themes: true,
+                    selected: 0,
+                },
+                Mode::Editor(super::super::editor::Editor::new(None, None)),
+                Mode::Browse,
+                Mode::Help,
+                Mode::Diff {
+                    view: crate::comparison::text::diff(
+                        "test.rs".into(),
+                        "fn main() { let x = 1; }\n",
+                        "fn main() { let x = 2; }\n",
+                    ),
+                    selected: 0,
+                },
+            ];
+            for mode in modes {
+                app.mode = mode;
+                for (width, height) in [(120, 30), (40, 12), (1, 1)] {
+                    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                    terminal.draw(|frame| draw(frame, &app)).unwrap();
+                    let buffer = terminal.backend().buffer();
+                    assert_eq!(buffer[(0, 0)].bg, palette.background);
+                    if width != 120 {
+                        continue;
+                    }
+                    let rendered: String = buffer
+                        .content
+                        .iter()
+                        .map(tuirealm::ratatui::buffer::Cell::symbol)
+                        .collect();
+                    if matches!(app.mode, Mode::Settings { themes: true, .. }) {
+                        for theme in Theme::ALL {
+                            assert!(rendered.contains(theme.name()));
+                        }
+                        assert!(rendered.contains("Active"));
+                        assert!(
+                            buffer
+                                .content
+                                .iter()
+                                .any(|cell| cell.bg == palette.selection)
+                        );
+                    }
+                    if matches!(app.mode, Mode::Browse) {
+                        assert!(
+                            buffer
+                                .content
+                                .iter()
+                                .any(|cell| cell.symbol() == "s" && cell.fg == palette.source)
+                        );
+                    }
+                    if matches!(app.mode, Mode::Diff { .. }) {
+                        let keyword = theme.syntax_color([180, 142, 173]);
+                        assert!(
+                            buffer
+                                .content
+                                .iter()
+                                .any(|cell| cell.symbol() == "f" && cell.fg == keyword)
+                        );
+                        assert!(
+                            buffer
+                                .content
+                                .iter()
+                                .any(|cell| cell.bg == palette.selection)
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn compare_filter_toggle_highlights_active_mode_and_filters_both_columns() {
         let directory = tempfile::tempdir().unwrap();
         let mut app = App {
@@ -677,6 +888,9 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Browse,
+            theme: super::super::theme::ThemeSettings::load(
+                directory.path().join("comparison-ui.json"),
+            ),
             home_folder: None,
             generation: 0,
             busy: false,
@@ -751,6 +965,9 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Profiles { selected: 0 },
+            theme: super::super::theme::ThemeSettings::load(
+                directory.path().join("comparison-ui.json"),
+            ),
             home_folder: None,
             generation: 0,
             busy: false,
@@ -806,6 +1023,9 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Editor(editor),
+            theme: super::super::theme::ThemeSettings::load(
+                directory.path().join("comparison-ui.json"),
+            ),
             home_folder: None,
             generation: 0,
             busy: false,
@@ -907,6 +1127,9 @@ mod tests {
             busy: false,
             loading_diff: false,
             home_folder: None,
+            theme: super::super::theme::ThemeSettings::load(
+                directory.path().join("comparison-ui.json"),
+            ),
             message: "Ready".into(),
             keyring: false,
             prompt_password: false,

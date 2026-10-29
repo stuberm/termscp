@@ -1,6 +1,18 @@
 # 主题
 
-sidemirror 允许你为应用程序中的多个组件设置颜色。有两种方式可以自定义 sidemirror：
+## 文件夹比较主题
+
+默认比较界面使用基于 [Catppuccin 官方调色板](https://catppuccin.com/palette/) 的 **Catppuccin Mocha**。在已保存的比较列表、文件夹浏览或空闲的文本差异界面按 **F4** 打开 **Settings**，然后在 **Themes** 上按 Enter。使用 Up/Down 或 j/k 选择 **Catppuccin Mocha**、**Tokyo Night**（Default 变体）或 **Terminal default**，按 Enter 应用并保存。Escape 返回上一级而不应用尚未确认的选择；再次按 Escape 回到之前的界面。
+
+主题覆盖比较界面、输入框、弹窗、状态颜色、选中项与修改块的背景以及语法高亮。状态标签始终显示，不只依赖颜色区分。选择以原子方式保存在 sidemirror 配置目录中的 `comparison-ui.json`（`theme` 为 `catppuccin-mocha`、`tokyo-night` 或 `terminal`）。配置缺失、无效或主题未知时使用 Mocha。终端主题使用终端界面颜色，并保留原来的深色语法调色板。
+
+Tokyo Night 使用 [terminalcolors.com 的 Default 调色板](https://terminalcolors.com/themes/tokyo-night/)：背景 `#1a1b26`、文字 `#c0caf5`、选中背景 `#283457`、蓝色强调色 `#7aa2f7`。次要文字使用 ANSI 白色 `#a9b1d6`，边框使用亮黑色 `#414868`，未选中的修改块使用黑色 `#15161e`。语法配色也使用同一终端调色板，不再使用 Neovim 专用的额外颜色。
+
+## 传输界面主题
+
+继承的 `sidemirror transfer` 界面使用单独的 `theme.toml` 设置。下面的配置菜单和主题导入说明仅适用于该界面，不会改变比较主题。
+
+sidemirror 允许你为传输界面中的多个组件设置颜色。有两种方式可以自定义：
 
 - 通过 **配置菜单**
 - 导入 **主题文件**
