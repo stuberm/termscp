@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::time::SystemTime;
 
-use super::keys::filestorage::FileStorage;
 use super::keys::keyringstorage::KeyringStorage;
 use super::keys::{KeyStorage, KeyStorageError};
 use crate::config::bookmarks::{Bookmark, UserHosts};
@@ -28,7 +27,7 @@ pub struct BookmarksClient {
 impl BookmarksClient {
     /// Instantiates a new BookmarksClient
     /// Bookmarks file path must be provided
-    /// Storage path for file provider must be provided
+    /// The storage path is used only to detect legacy file keys, never to read or write them.
     pub fn new(
         bookmarks_file: &Path,
         storage_path: &Path,
@@ -39,7 +38,7 @@ impl BookmarksClient {
         let default_hosts: UserHosts = UserHosts::default();
         debug!("Setting up bookmarks client...");
         // Get key storage
-        let (key_storage, service_id) = Self::keyring(storage_path, keyring);
+        let (key_storage, service_id) = Self::keyring(keyring)?;
         // Load key
         let key: String = match key_storage.get_key(service_id) {
             Ok(k) => {
@@ -48,6 +47,12 @@ impl BookmarksClient {
             }
             Err(e) => match e {
                 KeyStorageError::NoSuchKey => {
+                    if storage_path.join(".bookmarks.key").exists() {
+                        return Err(SerializerError::new_ex(
+                            SerializerErrorKind::Io,
+                            "Legacy file-key storage detected, but no native bookmark key exists. Recover your credentials with the previous version before saving them securely again; automatic plaintext-key fallback is not supported.".into(),
+                        ));
+                    }
                     // If no such key, generate key and set it into the storage
                     let key: String = Self::generate_key();
                     debug!("Key doesn't exist yet or could not be loaded; generated a new key");
@@ -96,34 +101,23 @@ impl BookmarksClient {
     }
 
     /// Get the key storage
-    fn keyring(storage_path: &Path, keyring: bool) -> (Box<dyn KeyStorage>, &'static str) {
-        if keyring && cfg!(feature = "keyring") {
-            debug!("Setting up KeyStorage");
-            let username = whoami::username().unwrap_or_default();
-            let storage: KeyringStorage = KeyringStorage::new(username.as_str());
-            // Check if keyring storage is supported
-            #[cfg(not(test))]
-            let app_name: &str = "sidemirror";
-            #[cfg(test)] // NOTE: when running test, add -test
-            let app_name: &str = "sidemirror-test";
-            match storage.is_supported() {
-                true => {
-                    debug!("Using KeyringStorage");
-                    (Box::new(storage), app_name)
-                }
-                false => {
-                    warn!("KeyringStorage is not supported; using FileStorage");
-                    (Box::new(FileStorage::new(storage_path)), "bookmarks")
-                }
-            }
-        } else {
-            #[cfg(not(test))]
-            let app_name: &str = "bookmarks";
-            #[cfg(test)] // NOTE: when running test, add -test
-            let app_name: &str = "bookmarks-test";
-            debug!("Using FileStorage");
-            (Box::new(FileStorage::new(storage_path)), app_name)
+    fn keyring(keyring: bool) -> Result<(Box<dyn KeyStorage>, &'static str), SerializerError> {
+        super::keys::require_native_store(keyring)
+            .map_err(|error| SerializerError::new_ex(SerializerErrorKind::Io, error))?;
+        let username = whoami::username()
+            .map_err(|error| SerializerError::new_ex(SerializerErrorKind::Io, error.to_string()))?;
+        #[cfg(not(test))]
+        let app_name = "sidemirror";
+        #[cfg(test)]
+        let app_name = "sidemirror-test";
+        let storage = KeyringStorage::new(&username);
+        if !storage.is_supported() {
+            return Err(SerializerError::new_ex(
+                SerializerErrorKind::Io,
+                "Native credential store is unavailable or locked; unlock or configure your OS credential store. No fallback is supported.".into(),
+            ));
         }
+        Ok((Box::new(storage), app_name))
     }
 
     /// Iterate over bookmarks keys
@@ -365,6 +359,30 @@ impl BookmarksClient {
                 err.to_string(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod native_policy_tests {
+    use super::*;
+
+    #[test]
+    fn disabled_native_store_never_reads_or_overwrites_legacy_file_keys() {
+        let directory = tempfile::tempdir().unwrap();
+        let legacy_key = directory.path().join(".bookmarks.key");
+        std::fs::write(&legacy_key, "legacy-key").unwrap();
+        let bookmarks = directory.path().join("bookmarks.toml");
+        let result = BookmarksClient::new(&bookmarks, directory.path(), 16, false);
+        let Err(error) = result else {
+            panic!("disabled native storage must fail");
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("Native credential storage is required")
+        );
+        assert!(!bookmarks.exists());
+        assert_eq!(std::fs::read_to_string(legacy_key).unwrap(), "legacy-key");
     }
 }
 

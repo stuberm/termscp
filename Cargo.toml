@@ -29,9 +29,10 @@ depends = ""
 extended-description-file = "docs/misc/README.deb.txt"
 
 [features]
-default = ["keyring", "smb"]
+default = ["smb"]
 github-actions = []
 isolated-tests = []
+# Compatibility alias: native credential storage is always compiled and required.
 keyring = []
 smb = ["dep:remotefs-smb"]
 smb-vendored = ["remotefs-smb/vendored"]
@@ -46,6 +47,7 @@ bytesize = "2"
 cbc = { version = "0.2", features = ["alloc"] }
 chrono = "0.4"
 content_inspector = "0.2"
+crossterm = "0.29"
 dirs = "7"
 edit = "0.1"
 filetime = "0.2"
@@ -71,8 +73,12 @@ self_update = { version = "0.42", default-features = false, features = ["archive
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 shellexpand = "3"
 simplelog = "0.12"
+similar = "2"
+url = "2"
+percent-encoding = "2"
 ssh2-config = "0.8"
 tempfile = "3"
 thiserror = "2"

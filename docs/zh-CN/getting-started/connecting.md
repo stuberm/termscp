@@ -1,8 +1,10 @@
 # 连接到服务器
 
-sidemirror 可以根据你传入的参数以三种不同的方式启动。
+不带参数启动 sidemirror 会显示已保存的比较和 **New comparison（新建比较）**。选择新建比较或按 `n`，输入名称并选择源和目标；两端均可选择 Local、SFTP/SCP、FTP/FTPS、S3、GCS、Kubernetes、WebDAV 或启用功能时的 SMB，并提供对应的连接、认证和文件夹设置。F2/F3 选择面板；Enter 保存并打开，已有比较可用 Enter 重新打开或用 `e` 更新。请参阅[文件夹比较](../usage/folder-comparison.md)。旧配置会自动加载并在下次保存时迁移。
 
-- 不带参数：sidemirror 打开认证表单，你在其中提供连接到远程主机所需的参数。
+原有文件传输工作流程仍可通过以下方式使用：
+
+- `sidemirror transfer`：打开认证表单，你在其中提供连接到远程主机所需的参数。
 - 带地址参数：sidemirror 跳过认证表单，直接连接到远程主机。
 - 通过 `-b <bookmark-name>` 传入书签名称：sidemirror 将参数解析为已保存的书签并进行连接。重复使用 `-b` 可打开多个书签。
 
@@ -10,7 +12,7 @@ sidemirror 可以根据你传入的参数以三种不同的方式启动。
 
 ## 认证表单
 
-当 sidemirror 在不带地址的情况下启动时，会显示认证表单。填写协议、地址、端口、用户名和密码，然后进行连接。连接成功后，sidemirror 将打开双面板浏览器。
+当 `sidemirror transfer` 在不带地址的情况下启动时，会显示认证表单。填写协议、地址、端口、用户名和密码，然后进行连接。连接成功后，sidemirror 将打开双面板浏览器。
 
 ## SSH 配置优先级
 

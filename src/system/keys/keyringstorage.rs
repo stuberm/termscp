@@ -19,8 +19,8 @@ static INIT_STORE: Once = Once::new();
 /// Cargo features, `keyring-core` 4.x requires the application to register a store
 /// at runtime *before* creating any [`Keyring`] entry. We do this lazily and
 /// exactly once, choosing the native store for the current platform. On platforms
-/// with no supported store nothing is registered, so [`Keyring`] operations fail
-/// and the caller transparently falls back to file-based storage.
+/// with no supported store nothing is registered, so credential operations fail.
+/// Callers must propagate errors; file storage is never a fallback.
 fn ensure_default_store() {
     INIT_STORE.call_once(|| {
         #[cfg(target_os = "macos")]
@@ -57,6 +57,7 @@ impl KeyStorage for KeyringStorage {
     /// The key might be acccess through an identifier, which identifies
     /// the key in the storage
     fn get_key(&self, storage_id: &str) -> Result<String, KeyStorageError> {
+        super::require_native_store(true).map_err(|_| KeyStorageError::ProviderError)?;
         ensure_default_store();
         let storage: Keyring = Keyring::new(storage_id, self.username.as_str())?;
         match storage.get_password() {
@@ -77,6 +78,7 @@ impl KeyStorage for KeyringStorage {
 
     /// Set the key into the key storage
     fn set_key(&self, storage_id: &str, key: &str) -> Result<(), KeyStorageError> {
+        super::require_native_store(true).map_err(|_| KeyStorageError::ProviderError)?;
         ensure_default_store();
         let storage: Keyring = Keyring::new(storage_id, self.username.as_str())?;
         match storage.set_password(key) {
@@ -102,7 +104,8 @@ impl KeyStorage for KeyringStorage {
         match storage.get_password() {
             Ok(_) => true,
             Err(KeyringError::NoStorageAccess(_) | KeyringError::PlatformFailure(_)) => false,
-            Err(_) => true,
+            Err(KeyringError::NoEntry) => true,
+            Err(_) => false,
         }
     }
 }

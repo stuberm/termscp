@@ -10,6 +10,7 @@
 
 # 使用 sidemirror
 
+- [只读文件夹比较](usage/folder-comparison.md)
 - [文件浏览器](usage/file-explorer.md)
 - [键盘快捷键](usage/keyboard-shortcuts.md)
 - [批量操作文件](usage/multiple-files.md)

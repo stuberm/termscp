@@ -1,9 +1,19 @@
 # Password security
 
+## Comparison profiles
+
+Native credential storage is mandatory and always enabled. Successfully used passwords and S3 secret access keys are stored directly in the OS credential store and reused for the same endpoint settings. Secrets never enter `comparisons.json`. There is no session-only password mode, opt-out, or file-storage fallback: an unavailable or locked store produces an explicit error. `--wno-keyring` is rejected. Native storage is always compiled, including with `--no-default-features`; the legacy `keyring` feature is only a compatibility alias. Older profiles cannot disable this policy.
+
+Temporary S3 session/security tokens are not passwords and remain ephemeral. Use your OS credential manager to remove saved entries. SSH agents and credential profiles remain supported. See [folder comparison](../usage/folder-comparison.md) for details and current transport-verification limitations.
+
+## Connection bookmarks
+
+Connection bookmarks also require native credential storage.
+
 Bookmarks are saved in your configuration directory along with their passwords.
 Passwords are not stored in plaintext: they are encrypted with AES.
 
-The key used to encrypt passwords is stored, where possible, in the operating
+The key used to encrypt passwords is stored exclusively in the operating
 system secret store:
 
 - The Windows Vault on Windows
@@ -12,10 +22,7 @@ system secret store:
 
 This is managed directly by your operating system.
 
-On BSD and WSL there is no such secret store, so the encryption key is saved on
-disk at `$HOME/.config/sidemirror`. The location protects the key with file
-permissions so that it cannot be read by other users, but you should still avoid
-saving passwords for servers exposed on the internet on these systems.
+Systems without an available native store fail explicitly; keys are never saved in plaintext files. WSL requires a working Linux Secret Service. Existing file-key bookmarks are not automatically migrated or deleted: keep the old files until you have recovered your credentials and saved them securely again.
 
 ## Linux keyring
 
@@ -29,8 +36,7 @@ few services provide it:
 - For other desktop environments, you can use [KeepassXC](https://keepassxc.org/)
   to obtain a keyring. It must be set up to work with sidemirror; see
   [KeepassXC setup](#keepassxc-setup) below.
-- If you do not want to install any of these services, sidemirror keeps working as
-  usual and falls back to saving the key in a file, as it does for BSD and WSL.
+- A working, unlocked Secret Service and session D-Bus are required. Without them, credential operations fail; no fallback is provided.
 
 ### KeepassXC setup
 

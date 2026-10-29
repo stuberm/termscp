@@ -343,10 +343,10 @@ impl Component for FileList {
                 let index = value.unwrap_payload().unwrap_single().unwrap_usize();
                 self.states.list_index = index.min(self.states.list_len().saturating_sub(1));
             }
-            Attribute::Focus => {
-                if value.unwrap_flag() && !self.states.is_selectable(self.states.list_index) {
-                    self.states.fix_list_index();
-                }
+            Attribute::Focus
+                if value.unwrap_flag() && !self.states.is_selectable(self.states.list_index) =>
+            {
+                self.states.fix_list_index();
             }
             _ => {}
         }

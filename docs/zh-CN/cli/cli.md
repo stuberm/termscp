@@ -1,6 +1,8 @@
 # 命令行用法
 
-sidemirror 可以通过以下调用形式启动：
+不带参数运行 `sidemirror` 会打开主屏幕，显示已保存的比较和 **New comparison（新建比较）**。新建比较独立配置源和目标，提供原有协议专用设置：Local、SFTP/SCP、FTP/FTPS、S3、GCS、Kubernetes、WebDAV 和启用功能时的 SMB，然后保存并打开。已有配置可重新打开并原位更新。`sidemirror compare` 打开同一个主屏幕，`sidemirror compare SOURCE DESTINATION` 可直接开始比较。旧的 left/right 配置会自动加载，并在下次保存时迁移为有类型的 source/destination 数据。
+
+原有传输工作流程仍支持以下旧式调用形式：
 
 ```sh
 sidemirror [options]... [protocol://user@address:port:wrkdir] [protocol://user@address:port:wrkdir] [local-wrkdir]
@@ -14,7 +16,7 @@ sidemirror [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 
 以及两者的任意组合。
 
-如果未提供额外参数，sidemirror 会显示身份验证表单。如果提供了地址参数或书签名称，sidemirror 会跳过该表单并直接连接到远程服务器。当提供地址或书签时，你还可以将本地主机的起始工作目录作为最后一个位置参数提供。
+使用 `sidemirror transfer` 打开原有的身份验证与书签界面。如果提供了地址参数或书签名称，传输工作流程会跳过该表单并直接连接到远程服务器。当提供地址或书签时，你还可以将本地主机的起始工作目录作为最后一个位置参数提供。
 
 ## 选项
 
@@ -25,7 +27,7 @@ sidemirror [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 | `-P <password>`      | 从命令行提供密码。重复使用该标志可为多个远程主机提供密码；其顺序必须与地址参数一致。不推荐使用。 |
 | `-q`                 | 禁用日志记录。                                          |
 | `-T <ticks>`         | 设置 UI 的 tick 间隔（以毫秒为单位）。默认值为 `10`。               |
-| `--wno-keyring`      | 禁用系统 keyring 支持。                                 |
+| `--wno-keyring`      | 已废弃，使用时会报错；原生凭据存储是强制要求。                                 |
 | `-v`                 | 打印版本信息。                                          |
 | `--help`             | 打印帮助页面。                                          |
 
@@ -33,7 +35,19 @@ sidemirror [options]... -b [bookmark-name] -b [bookmark-name] [local-wrkdir]
 
 ## 子命令
 
+运行 `sidemirror compare SOURCE DESTINATION` 开始只读递归文件夹比较，或运行 `sidemirror compare` 打开已保存的比较。两个端点各自都可以是本地文件夹、标准 `sftp://`、`scp://`、`ftp://`、`ftps://` 或 HTTP(S) WebDAV URL，以及任意受支持协议的 `bookmark:NAME`。完整的协议专用选项通过设置面板或保存的配置提供。`--save NAME` 保存新配置，`--profile NAME` 重新打开配置，`--ignore GLOB` 排除条目，`--differences` 仅显示差异，`--password-prompt` 提供掩码密码输入。键盘操作、限制和安全说明请参阅[文件夹比较](../usage/folder-comparison.md)。
+
 sidemirror 提供以下子命令。
+
+### 原有文件传输
+
+```sh
+sidemirror transfer
+sidemirror transfer 'sftp://user@server:22:/folder'
+sidemirror transfer -b connection-bookmark
+```
+
+没有端点参数时打开原有的身份验证与书签界面；提供端点时打开文件传输浏览器。传输地址使用原有的冒号分隔目录语法，与比较 URL 不同。全局日志、tick 和密钥环选项请放在 `transfer` 前面。
 
 ### 导入主题
 

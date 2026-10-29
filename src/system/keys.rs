@@ -3,11 +3,18 @@
 //! `keystorage` provides the trait to manipulate to a KeyStorage
 
 // Storages
-pub mod filestorage;
 pub mod keyringstorage;
 // ext
 use keyring_core::Error as KeyringError;
 use thiserror::Error;
+
+/// Reject attempts to disable mandatory, unconditionally compiled native storage.
+pub(crate) fn require_native_store(enabled: bool) -> Result<(), String> {
+    if !enabled {
+        return Err("Native credential storage is required. Remove --wno-keyring; no session-only or file fallback is supported.".into());
+    }
+    Ok(())
+}
 
 /// defines the error type for the `KeyStorage`
 #[derive(Debug, Error)]
@@ -50,6 +57,12 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
+
+    #[test]
+    fn native_storage_is_required_even_without_default_features() {
+        assert!(require_native_store(true).is_ok());
+        assert!(require_native_store(false).is_err());
+    }
 
     #[test]
     fn test_system_keys_mod_errors() {

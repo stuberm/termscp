@@ -1,8 +1,14 @@
 # Connecting to a server
 
-sidemirror can start in three different ways depending on the arguments you pass.
+Starting sidemirror without arguments lists saved comparisons plus **New comparison**.
+Select New comparison or press `n`, name it, and select a source and destination;
+either may be Local, SFTP/SCP, FTP/FTPS, S3, GCS, Kubernetes, WebDAV or feature-enabled SMB. Each panel exposes the corresponding connection/authentication and folder settings. F2/F3 selects a panel; Enter saves and opens it. Reopen a stored
+comparison with Enter or update it with `e`. See [folder comparison](../usage/folder-comparison.md).
+Older profile data is loaded automatically and migrated on the next save.
 
-- No arguments: sidemirror opens the authentication form, where you provide the
+For the inherited file-transfer workflow:
+
+- `sidemirror transfer`: opens the authentication form, where you provide the
   parameters required to connect to the remote host.
 - An address argument: sidemirror skips the authentication form and connects
   directly to the remote host.
@@ -14,7 +20,7 @@ start working directory for the local host.
 
 ## The authentication form
 
-When sidemirror starts without an address, it shows the authentication form. Fill
+When `sidemirror transfer` starts without an address, it shows the authentication form. Fill
 in the protocol, address, port, username, and password, then connect. sidemirror
 will open the dual-pane explorer once the connection succeeds.
 

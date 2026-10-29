@@ -10,6 +10,7 @@
 
 # Using sidemirror
 
+- [Read-only folder comparison](usage/folder-comparison.md)
 - [The file explorer](usage/file-explorer.md)
 - [Keyboard shortcuts](usage/keyboard-shortcuts.md)
 - [Working with multiple files](usage/multiple-files.md)

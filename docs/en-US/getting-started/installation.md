@@ -5,15 +5,15 @@ Sidemirror is currently built from source. Published termscp packages and upstre
 Install Rust using rustup, then run from the repository root:
 
 ```sh
-cargo run --no-default-features
+cargo run --no-default-features --features keyring
 ```
 
-The required Rust version is pinned in `rust-toolchain.toml`. Disabling default features removes SMB and system-keyring support, but retains FTP, FTPS, and SFTP.
+The required Rust version is pinned in `rust-toolchain.toml`. This build removes SMB, but retains mandatory native credential storage, FTP, FTPS, and SFTP. On Linux, a running, unlocked Secret Service on the session D-Bus is required for credentials. There is no file-key or session-only password fallback.
 
 For an optimized build:
 
 ```sh
-cargo build --release --no-default-features
+cargo build --release --no-default-features --features keyring
 ./target/release/sidemirror
 ```
 

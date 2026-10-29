@@ -4,5 +4,6 @@
 
 // Modules
 pub mod activities;
+pub(crate) mod comparison;
 pub mod context;
 pub(crate) mod store;

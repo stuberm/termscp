@@ -1,5 +1,6 @@
 # Bookmarks and recent hosts
 
+Connection bookmarks are managed in `sidemirror transfer`, not the default comparison profile picker. Comparison profiles are separate and always open compare view; they may reuse a connection bookmark through `bookmark:NAME` as either the source or destination endpoint. See [folder comparison](folder-comparison.md).
 sidemirror lets you save your favourite hosts as bookmarks, which can then be loaded quickly from the main layout. sidemirror also keeps the last 16 hosts you connected to. Both features let you reload all the parameters required to connect to a remote simply by selecting an entry in the tab under the authentication form.
 
 ## Where bookmarks are stored

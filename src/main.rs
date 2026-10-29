@@ -5,10 +5,13 @@
 
 mod activity_manager;
 mod cli;
+mod comparison;
 mod config;
 mod explorer;
 mod filetransfer;
 mod host;
+#[cfg(test)]
+mod startup_tests;
 mod support;
 mod system;
 mod ui;
@@ -52,7 +55,7 @@ fn main() -> MainResult<()> {
     }
     info!("{APP_NAME} v{SIDEMIRROR_VERSION} - Developed by {SIDEMIRROR_AUTHORS}");
     // Run
-    info!("Starting activity manager...");
+    info!("Starting sidemirror...");
     run(run_opts)
 }
 
@@ -60,7 +63,43 @@ fn main() -> MainResult<()> {
 /// In case of success returns `RunOpts`
 /// in case something is wrong returns the error message
 fn parse_args(args: Args) -> Result<RunOpts, String> {
+    system::require_native_store(!args.wno_keyring)?;
     let run_opts = match args.nested {
+        Some(ArgsSubcommands::Compare(compare)) => RunOpts {
+            task: Task::Compare(compare),
+            keyring: !args.wno_keyring,
+            log_level: if args.quiet {
+                LogLevel::Off
+            } else if args.debug {
+                LogLevel::Trace
+            } else {
+                LogLevel::Info
+            },
+            ..RunOpts::default()
+        },
+        Some(ArgsSubcommands::Transfer(transfer)) => {
+            let transfer_args = Args {
+                positional: transfer.positional,
+                bookmark: transfer.bookmark,
+                password: transfer.password,
+                ..Args::default()
+            };
+            parse_transfer_args(
+                &transfer_args,
+                RunOpts {
+                    keyring: !args.wno_keyring,
+                    ticks: Duration::from_millis(args.ticks),
+                    log_level: if args.debug {
+                        LogLevel::Trace
+                    } else if args.quiet {
+                        LogLevel::Off
+                    } else {
+                        LogLevel::Info
+                    },
+                    ..RunOpts::default()
+                },
+            )?
+        }
         Some(ArgsSubcommands::Update(_)) => RunOpts::update(),
         Some(ArgsSubcommands::ImportSshHosts(subargs)) => {
             RunOpts::import_ssh_hosts(subargs.ssh_config, !args.wno_keyring)
@@ -87,27 +126,36 @@ fn parse_args(args: Args) -> Result<RunOpts, String> {
             }
             // Match ticks
             run_opts.ticks = Duration::from_millis(args.ticks);
-            // Remote argument
-            run_opts.remote = RemoteArgs::try_from(&args)?;
-
-            // set activity based on remote state
-            run_opts.task = if run_opts.remote.remote.is_none() {
-                Task::Activity(NextActivity::Authentication)
+            if args.positional.is_empty() && args.bookmark.is_empty() {
+                if !args.password.is_empty() {
+                    return Err(
+                        "Use compare --password-prompt or transfer -P for authentication".into(),
+                    );
+                }
+                // Profiles are comparison sessions; no view setting or data migration needed.
+                run_opts
             } else {
-                Task::Activity(NextActivity::FileTransfer)
-            };
-
-            // Local directory
-            if let Some(localdir) = run_opts.remote.local_dir.as_deref()
-                && let Err(err) = env::set_current_dir(localdir)
-            {
-                return Err(format!("Bad working directory argument: {err}"));
+                // Retain the inherited address/bookmark CLI for compatibility.
+                parse_transfer_args(&args, run_opts)?
             }
-
-            run_opts
         }
     };
 
+    Ok(run_opts)
+}
+
+fn parse_transfer_args(args: &Args, mut run_opts: RunOpts) -> Result<RunOpts, String> {
+    run_opts.remote = RemoteArgs::try_from(args)?;
+    run_opts.task = if run_opts.remote.remote.is_none() {
+        Task::Activity(NextActivity::Authentication)
+    } else {
+        Task::Activity(NextActivity::FileTransfer)
+    };
+    if let Some(localdir) = run_opts.remote.local_dir.as_deref()
+        && let Err(err) = env::set_current_dir(localdir)
+    {
+        return Err(format!("Bad working directory argument: {err}"));
+    }
     Ok(run_opts)
 }
 
@@ -121,6 +169,7 @@ fn run(run_opts: RunOpts) -> MainResult<()> {
             run_activity(activity, run_opts.ticks, run_opts.remote, run_opts.keyring)
         }
         Task::Version => print_version(),
+        Task::Compare(args) => ui::comparison::run(args, run_opts.keyring),
     }
 }
 

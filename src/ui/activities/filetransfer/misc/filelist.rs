@@ -139,12 +139,12 @@ impl FileTransferActivity {
         let local_entries: HashMap<String, (File, usize)> = local_files_snapshot
             .into_iter()
             .enumerate()
-            .map(|(index, file)| (file.name().to_string(), (file, index)))
+            .map(|(index, file)| (file.name().clone(), (file, index)))
             .collect();
         let remote_entries: HashMap<String, (File, usize)> = remote_files_snapshot
             .into_iter()
             .enumerate()
-            .map(|(index, file)| (file.name().to_string(), (file, index)))
+            .map(|(index, file)| (file.name().clone(), (file, index)))
             .collect();
 
         let mut names: Vec<String> = local_entries
@@ -254,7 +254,7 @@ impl FileTransferActivity {
         let mut span = match id {
             Id::ExplorerHostBridge => SpanStatic::from(self.host_bridge().fmt_file(file)),
             Id::ExplorerRemote => SpanStatic::from(self.remote().fmt_file(file)),
-            _ => SpanStatic::from(file.name().to_string()),
+            _ => SpanStatic::from(file.name().clone()),
         };
         let enqueued = match id {
             Id::ExplorerHostBridge => self.host_bridge().enqueued().contains_key(file.path()),

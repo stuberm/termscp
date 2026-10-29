@@ -8,6 +8,8 @@ pub mod bookmarks_client;
 pub mod config_client;
 pub mod environment;
 mod keys;
+pub(crate) use keys::keyringstorage::KeyringStorage;
+pub(crate) use keys::{KeyStorage, KeyStorageError, require_native_store};
 pub mod logging;
 pub mod notifications;
 pub mod sshkey_storage;

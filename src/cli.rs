@@ -2,6 +2,8 @@
 //!
 //! defines the types for main.rs types
 
+#[cfg(test)]
+mod compare_tests;
 mod remote;
 
 use std::path::PathBuf;
@@ -20,12 +22,16 @@ pub enum Task {
     ImportSshHosts(Option<PathBuf>),
     ImportTheme(PathBuf),
     InstallUpdate,
+    Compare(CompareArgs),
     Version,
 }
 
 #[derive(Default, FromArgs)]
 #[argh(description = "
-where positional can be: 
+With no arguments, open the comparison profile picker.
+Use `compare SOURCE DESTINATION` to compare folders, or `transfer` for the legacy connection screen.
+
+Legacy positional arguments can be:
         - [address_a] [address_b] [local-wrkdir]
     OR
         - -b [bookmark-name_1] -b [bookmark-name_2] [local-wrkdir]
@@ -63,7 +69,7 @@ pub struct Args {
     /// print version
     #[argh(switch, short = 'v')]
     pub version: bool,
-    /// disable keyring support
+    /// obsolete: rejected because native credential storage is required
     #[argh(switch)]
     pub wno_keyring: bool,
     // -- positional
@@ -74,10 +80,51 @@ pub struct Args {
 #[derive(FromArgs)]
 #[argh(subcommand)]
 pub enum ArgsSubcommands {
+    Compare(CompareArgs),
+    Transfer(TransferArgs),
     Config(ConfigArgs),
     ImportSshHosts(ImportSshHostsArgs),
     ImportTheme(ImportThemeArgs),
     Update(UpdateArgs),
+}
+
+#[derive(Default, FromArgs)]
+/// compare local/remote folders; configure all protocols in the profile editor
+#[argh(subcommand, name = "compare")]
+pub struct CompareArgs {
+    /// source and destination: local folder, sftp/scp/ftp/ftps/http(s) URL, or bookmark:NAME
+    #[argh(positional)]
+    pub roots: Vec<String>,
+    /// reopen a saved comparison profile
+    #[argh(option)]
+    pub profile: Option<String>,
+    /// save a new profile with this name
+    #[argh(option)]
+    pub save: Option<String>,
+    /// ignore glob matching a relative path (repeatable; matched directories are pruned)
+    #[argh(option)]
+    pub ignore: Vec<String>,
+    /// start with differences only
+    #[argh(switch)]
+    pub differences: bool,
+    /// prompt separately for each remote endpoint password (never saved)
+    #[argh(switch)]
+    pub password_prompt: bool,
+}
+
+#[derive(Default, FromArgs)]
+/// open the legacy file-transfer browser or connection/bookmark screen
+#[argh(subcommand, name = "transfer")]
+pub struct TransferArgs {
+    /// remote address(es) and optional local working directory
+    #[argh(positional)]
+    pub positional: Vec<String>,
+    /// connect using a saved connection bookmark (repeatable)
+    #[argh(option, short = 'b')]
+    pub bookmark: Vec<String>,
+    /// remote password (repeatable; discouraged, prefer a saved bookmark)
+    #[argh(option, short = 'P')]
+    pub password: Vec<String>,
 }
 
 #[derive(FromArgs)]
@@ -155,7 +202,7 @@ impl Default for RunOpts {
             ticks: Duration::from_millis(10),
             keyring: true,
             log_level: LogLevel::Info,
-            task: Task::Activity(NextActivity::Authentication),
+            task: Task::Compare(CompareArgs::default()),
         }
     }
 }
