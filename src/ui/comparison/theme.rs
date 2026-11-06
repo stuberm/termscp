@@ -1,10 +1,12 @@
-//! Semantic colors for the comparison UI, independent of legacy transfer themes.
+//! Comparison UI colors and general preferences, independent of legacy transfer settings.
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tuirealm::ratatui::style::{Color, Style};
+
+use crate::comparison::settings::Parallelism;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -136,11 +138,24 @@ impl Palette {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct Preferences {
+    #[serde(deserialize_with = "default_invalid_setting")]
     theme: Theme,
+    #[serde(deserialize_with = "default_invalid_setting")]
+    parallel_comparisons: Parallelism,
+}
+
+fn default_invalid_setting<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 pub(super) struct ThemeSettings {
     pub theme: Theme,
+    pub parallel_comparisons: Parallelism,
     path: PathBuf,
 }
 
@@ -153,22 +168,37 @@ impl ThemeSettings {
             .unwrap_or_default();
         Self {
             theme: preferences.theme,
+            parallel_comparisons: preferences.parallel_comparisons,
             path,
         }
     }
 
     /// Commit to memory only after the preference has been safely persisted.
     pub fn apply(&mut self, theme: Theme) -> io::Result<()> {
+        self.persist(theme, self.parallel_comparisons)?;
+        self.theme = theme;
+        Ok(())
+    }
+
+    pub fn apply_parallelism(&mut self, parallelism: Parallelism) -> io::Result<()> {
+        self.persist(self.theme, parallelism)?;
+        self.parallel_comparisons = parallelism;
+        Ok(())
+    }
+
+    fn persist(&self, theme: Theme, parallel_comparisons: Parallelism) -> io::Result<()> {
         let parent = self
             .path
             .parent()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No settings directory"))?;
         let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        let bytes = serde_json::to_vec_pretty(&Preferences { theme })?;
+        let bytes = serde_json::to_vec_pretty(&Preferences {
+            theme,
+            parallel_comparisons,
+        })?;
         file.write_all(&bytes)?;
         file.as_file().sync_all()?;
         file.persist(&self.path).map_err(|error| error.error)?;
-        self.theme = theme;
         Ok(())
     }
 }
@@ -205,6 +235,58 @@ mod tests {
         assert!(settings.apply(Theme::CatppuccinMocha).is_err());
         assert_eq!(settings.theme, Theme::Terminal);
         assert_eq!(ThemeSettings::load(path).theme, Theme::Terminal);
+    }
+
+    #[test]
+    fn parallelism_defaults_migrate_and_invalid_values_preserve_the_theme() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("comparison-ui.json");
+        assert_eq!(
+            ThemeSettings::load(path.clone()).parallel_comparisons,
+            Parallelism::default()
+        );
+        for content in [
+            r#"{"theme":"tokyo-night"}"#,
+            r#"{"theme":"tokyo-night","parallel_comparisons":0}"#,
+            r#"{"theme":"tokyo-night","parallel_comparisons":17}"#,
+            r#"{"theme":"tokyo-night","parallel_comparisons":null}"#,
+            r#"{"theme":"tokyo-night","parallel_comparisons":"4"}"#,
+        ] {
+            fs::write(&path, content).unwrap();
+            let settings = ThemeSettings::load(path.clone());
+            assert_eq!(settings.parallel_comparisons, Parallelism::default());
+            assert_eq!(settings.theme, Theme::TokyoNight);
+        }
+        fs::write(
+            &path,
+            r#"{"theme":"future-theme","parallel_comparisons":8}"#,
+        )
+        .unwrap();
+        let settings = ThemeSettings::load(path);
+        assert_eq!(settings.theme, Theme::CatppuccinMocha);
+        assert_eq!(settings.parallel_comparisons.get(), 8);
+    }
+
+    #[test]
+    fn theme_and_parallelism_persist_independently_and_failed_writes_preserve_memory() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("comparison-ui.json");
+        let eight = Parallelism::try_from(8).unwrap();
+        let mut settings = ThemeSettings::load(path.clone());
+        settings.apply(Theme::TokyoNight).unwrap();
+        settings.apply_parallelism(eight).unwrap();
+        let restored = ThemeSettings::load(path.clone());
+        assert_eq!(restored.theme, Theme::TokyoNight);
+        assert_eq!(restored.parallel_comparisons, eight);
+        settings.apply(Theme::Terminal).unwrap();
+        assert_eq!(
+            ThemeSettings::load(path.clone()).parallel_comparisons,
+            eight
+        );
+        settings.path = directory.path().join("missing").join("settings.json");
+        assert!(settings.apply_parallelism(Parallelism::default()).is_err());
+        assert_eq!(settings.parallel_comparisons, eight);
+        assert_eq!(ThemeSettings::load(path).parallel_comparisons, eight);
     }
 
     #[test]

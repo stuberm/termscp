@@ -1,34 +1,47 @@
 //! Folder comparison and confirmed bidirectional text merging.
+#[cfg(test)]
+mod copy_tests;
+#[cfg(test)]
+mod diff_return_tests;
 mod editor;
+#[cfg(test)]
+mod quick_tests;
+mod redraw;
 mod state;
 #[cfg(test)]
 mod tests;
 mod theme;
+mod timing;
+#[cfg(test)]
+mod timing_tests;
 mod view;
 
 use std::collections::BTreeMap;
 use std::io::{self, Stdout};
+use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use editor::Editor;
+use state::Browser;
+use theme::{Theme, ThemeSettings};
+use timing::{ComparisonTimer, Outcome, duration_label};
 use tuirealm::ratatui::Terminal;
 use tuirealm::ratatui::backend::CrosstermBackend;
 
 use crate::cli::CompareArgs;
 use crate::comparison::connection::Credentials;
 use crate::comparison::profiles::{Profile, ProfileStore};
+use crate::comparison::settings::QuickCheck;
 use crate::comparison::text::TextView;
 use crate::comparison::worker::{Event as WorkerEvent, Worker};
-use crate::comparison::{ScanEvent, Status};
+use crate::comparison::{ComparisonMode, Row, ScanEvent, Status, diagnostics};
 use crate::system::environment;
-use editor::Editor;
-use state::Browser;
-use theme::{Theme, ThemeSettings};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -58,6 +71,7 @@ enum Mode {
     },
     DeleteFolder(String),
     Browse,
+    Copying,
     Profiles {
         selected: usize,
     },
@@ -70,10 +84,17 @@ enum Mode {
         value: String,
     },
     Diff {
+        path: PathBuf,
         view: TextView,
         selected: usize,
     },
     Help,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PendingCopy {
+    Diff { to_right: bool, whole: bool },
+    Entries { paths: Vec<PathBuf>, to_right: bool },
 }
 
 struct App {
@@ -86,12 +107,14 @@ struct App {
     mode: Mode,
     generation: u64,
     busy: bool,
+    comparison_timer: ComparisonTimer,
+    comparison_mode: ComparisonMode,
     loading_diff: bool,
     message: String,
     keyring: bool,
     prompt_password: bool,
     quit: bool,
-    pending_copy: Option<(bool, bool)>,
+    pending_copy: Option<PendingCopy>,
 }
 
 pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -147,6 +170,8 @@ pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::E
         mode: Mode::Profiles { selected: 0 },
         generation: 0,
         busy: false,
+        comparison_timer: ComparisonTimer::default(),
+        comparison_mode: ComparisonMode::default(),
         loading_diff: false,
         message: "Select New comparison or open a saved comparison with Enter".into(),
         keyring,
@@ -158,9 +183,17 @@ pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::E
         app.open(profile);
     }
     let mut terminal = Screen::new()?;
+    let mut redraw = redraw::Redraw::default();
     while !app.quit {
-        app.poll_worker();
-        terminal.terminal.draw(|frame| view::draw(frame, &app))?;
+        if app.poll_worker() {
+            redraw.request(false);
+        }
+        if redraw.due(
+            Instant::now(),
+            matches!(app.comparison_timer, ComparisonTimer::Running(_)),
+        ) {
+            terminal.terminal.draw(|frame| view::draw(frame, &app))?;
+        }
         if event::poll(Duration::from_millis(50))? {
             // Drain queued repeats before polling scan results and redrawing again.
             // Otherwise every arrow key pays for a full browser rebuild while a
@@ -168,8 +201,11 @@ pub fn run(args: CompareArgs, keyring: bool) -> Result<(), Box<dyn std::error::E
             // Bound the batch so continuous input cannot starve worker updates.
             for _ in 0..64 {
                 match event::read()? {
-                    Event::Key(key) if key.kind != KeyEventKind::Release => app.key(key),
-                    Event::Resize(_, _) => {}
+                    Event::Key(key) if key.kind != KeyEventKind::Release => {
+                        app.key(key);
+                        redraw.request(true);
+                    }
+                    Event::Resize(_, _) => redraw.request(true),
                     _ => {}
                 }
                 if app.quit || !event::poll(Duration::ZERO)? {
@@ -213,6 +249,36 @@ impl Drop for Screen {
 }
 
 impl App {
+    fn quick_check(&self) -> QuickCheck {
+        self.profile
+            .as_ref()
+            .map_or_else(QuickCheck::default, |profile| profile.quick_check)
+    }
+
+    fn log_display_snapshot(&self, phase: &str) {
+        if !diagnostics::enabled() {
+            return;
+        }
+        diagnostics::record("display_snapshot", || {
+            serde_json::json!({
+                "request_id": self.generation, "phase": phase,
+                "directory": self.browser.directory.to_string_lossy(),
+                "differences_only": self.browser.differences_only, "recursive": self.browser.recursive,
+                "rows": self.browser.rows.len(),
+                "selected_path": self.browser.selected_row().map(|row| row.path.to_string_lossy()),
+                "diff_path": if let Mode::Diff { path, .. } = &self.mode { Some(path.to_string_lossy()) } else { None },
+                "ignores": self.profile.as_ref().map(|profile| &profile.ignores),
+            "quick_check": self.quick_check(),
+            })
+        });
+        diagnostics::display_rows(
+            self.generation,
+            self.comparison_mode,
+            self.browser.rows.values(),
+            self.quick_check(),
+        );
+    }
+
     fn cancel_diff(&mut self) {
         if self.loading_diff {
             if let Some(worker) = &self.worker {
@@ -263,14 +329,18 @@ impl App {
     }
 
     fn start(&mut self, profile: Profile, passwords: Credentials) {
+        self.comparison_mode = ComparisonMode::default().for_checks(profile.quick_check);
+        self.comparison_timer.start(Instant::now());
         self.generation += 1;
         self.worker = Some(Worker::start(
             profile.clone(),
             passwords,
             self.keyring,
             self.generation,
+            profile.effective_parallelism(self.theme.parallel_comparisons),
         ));
         self.profile = Some(profile);
+        self.browser.clear_marks();
         self.browser.rows.clear();
         self.browser.directory.clear();
         self.browser.selected = 0;
@@ -278,13 +348,15 @@ impl App {
         self.busy = true;
         self.loading_diff = false;
         self.mode = Mode::Browse;
-        self.message =
-            "Connecting / scanning — c to cancel; Enter opens file diff; copying requires confirmation".into();
+        self.message = format!(
+            "Connecting / {} — F5 full comparison; c cancel; Enter file diff; copying requires confirmation",
+            self.comparison_mode.label(self.quick_check())
+        );
     }
 
-    fn poll_worker(&mut self) {
+    fn poll_worker(&mut self) -> bool {
         let Some(worker) = &self.worker else {
-            return;
+            return false;
         };
         let mut events = Vec::new();
         let mut disconnected = false;
@@ -298,6 +370,14 @@ impl App {
                 }
             }
         }
+        let changed = events.iter().any(|event| match event {
+            WorkerEvent::Scan { id, .. }
+            | WorkerEvent::Finished { id, .. }
+            | WorkerEvent::Text { id, .. }
+            | WorkerEvent::Copied { id, .. }
+            | WorkerEvent::Updated { id, .. }
+            | WorkerEvent::Failed { id, .. } => *id == self.generation,
+        });
         let mut dirty = false;
         for event in events {
             match event {
@@ -310,55 +390,70 @@ impl App {
                             }) {
                                 continue;
                             }
-                            self.browser.rows.insert(row.path.clone(), row);
+                            dirty |= self.browser.update(row);
                         }
-                        dirty = true;
                     }
                 },
                 WorkerEvent::Finished {
                     id,
                     rows,
                     cancelled,
-                } if id == self.generation => {
-                    self.browser.rows = rows
-                        .into_iter()
-                        .map(|row| (row.path.clone(), row))
-                        .collect::<BTreeMap<_, _>>();
-                    if let Some(profile) = &self.profile {
-                        self.browser.apply_ignores(&profile.ignores);
-                    }
-                    dirty = true;
-                    self.busy = false;
-                    self.message = if cancelled {
-                        "Cancelled — partial results are not proof of equality; r to rescan".into()
-                    } else {
-                        "Scan complete — byte-verified regular files; symlinks are not followed"
-                            .into()
-                    };
-                    if let Some(root) = self.browser.rows.get(std::path::Path::new(""))
-                        && root.status == Status::Error
-                    {
-                        self.message = format!("Scan incomplete: {}", root.detail);
-                    }
+                    elapsed,
+                } => {
+                    dirty |= self.finish_comparison(id, rows, elapsed, cancelled);
                 }
-                WorkerEvent::Text { id, view } if id == self.generation => {
+                WorkerEvent::Updated { id, paths, rows } if id == self.generation => {
+                    let rows = rows.map(|rows| {
+                        rows.into_iter()
+                            .filter(|row| {
+                                !self.profile.as_ref().is_some_and(|profile| {
+                                    crate::comparison::is_ignored(&row.path, &profile.ignores)
+                                })
+                            })
+                            .collect()
+                    });
+                    self.browser.apply_copy_updates(&paths, rows);
+                    self.log_display_snapshot("copy_updates");
+                }
+                WorkerEvent::Text { id, path, view } if id == self.generation => {
                     self.busy = false;
                     self.loading_diff = false;
                     match view {
                         Ok(view) => {
                             let selected =
                                 view.lines.iter().position(|line| line.changed).unwrap_or(0);
-                            self.mode = Mode::Diff { view, selected };
+                            self.mode = Mode::Diff {
+                                view,
+                                selected,
+                                path,
+                            };
                             self.message = "Diff · ␍ marks CRLF · [no final newline] marks an unterminated line".into();
                         }
                         Err(error) => {
                             self.mode = Mode::Browse;
+                            // Scoped post-copy updates already invalidate any
+                            // possibly partial writes; no whole-tree restart.
                             self.message = error;
                         }
                     }
                 }
-                WorkerEvent::Failed { id, error } if id == self.generation => {
+                WorkerEvent::Copied { id, result } if id == self.generation => {
                     self.busy = false;
+                    self.loading_diff = false;
+                    self.mode = Mode::Browse;
+                    self.message = match result {
+                        Ok(count) => format!(
+                            "Copied {count} entries · only copied paths rechecked; comparison retained"
+                        ),
+                        Err(error) => error,
+                    };
+                }
+                WorkerEvent::Failed { id, error, elapsed } if id == self.generation => {
+                    self.comparison_timer.finish(elapsed, Outcome::Failed);
+                    self.busy = false;
+                    if matches!(self.mode, Mode::Copying) {
+                        self.mode = Mode::Browse;
+                    }
                     self.message = format!(
                         "Connection failed: {error} · a for endpoint passwords, o for saved comparisons"
                     );
@@ -370,23 +465,125 @@ impl App {
             self.browser.rebuild();
         }
         if disconnected && self.busy {
+            self.comparison_timer.stop(Outcome::Failed);
             self.busy = false;
             self.loading_diff = false;
+            self.mode = Mode::Browse;
             self.message = "Connection worker stopped; reopen the profile to reconnect".into();
+            return true;
         }
+        changed
+    }
+
+    fn finish_comparison(
+        &mut self,
+        id: u64,
+        rows: Vec<Row>,
+        elapsed: Duration,
+        cancelled: bool,
+    ) -> bool {
+        // An interrupted/replaced scan must not overwrite the next scan's timer.
+        if id != self.generation {
+            return false;
+        }
+        self.browser.rows = rows
+            .into_iter()
+            .map(|row| (row.path.clone(), row))
+            .collect::<BTreeMap<_, _>>();
+        if let Some(profile) = &self.profile {
+            self.browser.apply_ignores(&profile.ignores);
+        }
+        let outcome = if cancelled {
+            Outcome::Cancelled
+        } else if self
+            .browser
+            .rows
+            .values()
+            .any(|row| matches!(row.status, Status::Error | Status::Pending))
+        {
+            Outcome::Incomplete
+        } else {
+            Outcome::Completed
+        };
+        self.comparison_timer.finish(elapsed, outcome);
+        self.busy = false;
+        let elapsed = duration_label(elapsed);
+        self.message = match outcome {
+            Outcome::Cancelled => format!(
+                "Cancelled after {elapsed} — partial results are not proof of equality; r to rescan"
+            ),
+            Outcome::Completed if self.comparison_mode == ComparisonMode::Quick => format!(
+                "Scan complete in {elapsed} — metadata only; contents not verified · F5 full comparison"
+            ),
+            Outcome::Completed => format!(
+                "Scan complete in {elapsed} — content-verified regular files; symlinks are not followed"
+            ),
+            _ => format!(
+                "Scan incomplete after {elapsed} — some entries could not be verified; r to rescan"
+            ),
+        };
+        if !cancelled
+            && let Some(root) = self.browser.rows.get(std::path::Path::new(""))
+            && root.status == Status::Error
+        {
+            self.message = format!("Scan incomplete after {elapsed}: {}", root.detail);
+        }
+        self.log_display_snapshot("scan_finished");
+        true
     }
 
     fn key(&mut self, key: KeyEvent) {
-        if let Some((to_right, whole)) = self.pending_copy.take() {
+        if let Mode::Copying = self.mode {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Char('c')) {
+                if let Some(worker) = &self.worker {
+                    worker.cancel();
+                }
+                self.message =
+                    "Cancellation requested; waiting for current I/O; affected entries may need verification".into();
+            }
+            return;
+        }
+        if let Some(pending) = self.pending_copy.take() {
+            let (to_right, whole) = match pending {
+                PendingCopy::Diff { to_right, whole } => (to_right, whole),
+                PendingCopy::Entries { paths, to_right } => {
+                    if key.code == KeyCode::Char('y') {
+                        if let (Some(worker), Some(profile)) = (&mut self.worker, &self.profile) {
+                            self.generation += 1;
+                            match worker.copy_entries(
+                                self.generation,
+                                paths,
+                                to_right,
+                                profile.ignores.clone(),
+                            ) {
+                                Ok(()) => {
+                                    self.comparison_timer.stop(Outcome::Interrupted);
+                                    self.loading_diff = false;
+                                    self.busy = true;
+                                    self.mode = Mode::Copying;
+                                    self.message = "Copying — c/Esc cancels after current I/O; do not close until complete".into();
+                                }
+                                Err(error) => self.message = error,
+                            }
+                        }
+                    } else {
+                        self.message = "Copy cancelled".into();
+                    }
+                    return;
+                }
+            };
             if key.code == KeyCode::Char('y') {
-                if let Mode::Diff { view, selected } = &self.mode
+                if let Mode::Diff {
+                    path,
+                    view,
+                    selected,
+                } = &self.mode
                     && let Some(worker) = &self.worker
-                    && let Some(row) = self.browser.selected_row()
                 {
                     self.generation += 1;
                     match worker.copy(
                         self.generation,
-                        row.path.clone(),
+                        path.clone(),
                         view.clone(),
                         *selected,
                         to_right,
@@ -423,10 +620,7 @@ impl App {
             self.mode = Mode::Settings {
                 previous,
                 themes: false,
-                selected: Theme::ALL
-                    .iter()
-                    .position(|theme| *theme == self.theme.theme)
-                    .unwrap_or(0),
+                selected: 0,
             };
             return;
         }
@@ -436,17 +630,45 @@ impl App {
                 themes,
                 selected,
             } => match key.code {
-                KeyCode::Esc if *themes => *themes = false,
+                KeyCode::Esc if *themes => {
+                    *themes = false;
+                    *selected = 0;
+                }
                 KeyCode::Esc => {
                     self.mode = *std::mem::replace(previous, Box::new(Mode::Browse));
                 }
-                KeyCode::Down | KeyCode::Char('j') if *themes => {
-                    *selected = (*selected + 1).min(Theme::ALL.len() - 1);
+                KeyCode::Down | KeyCode::Char('j') => {
+                    let count = if *themes { Theme::ALL.len() } else { 2 };
+                    *selected = (*selected + 1).min(count - 1);
                 }
-                KeyCode::Up | KeyCode::Char('k') if *themes => {
+                KeyCode::Up | KeyCode::Char('k') => {
                     *selected = selected.saturating_sub(1);
                 }
-                KeyCode::Enter if !*themes => *themes = true,
+                KeyCode::Enter if !*themes && *selected == 0 => {
+                    *themes = true;
+                    *selected = Theme::ALL
+                        .iter()
+                        .position(|theme| *theme == self.theme.theme)
+                        .unwrap_or(0);
+                }
+                KeyCode::Left
+                | KeyCode::Right
+                | KeyCode::Char(' ' | '+' | '-')
+                | KeyCode::Enter
+                    if !*themes && *selected == 1 =>
+                {
+                    let parallelism = self
+                        .theme
+                        .parallel_comparisons
+                        .adjusted(!matches!(key.code, KeyCode::Left | KeyCode::Char('-')));
+                    self.message = match self.theme.apply_parallelism(parallelism) {
+                        Ok(()) => format!(
+                            "Default parallel comparisons saved: {} — applies on next open/refresh; profile overrides are unchanged",
+                            parallelism.get()
+                        ),
+                        Err(error) => format!("Could not save parallel comparisons: {error}"),
+                    };
+                }
                 KeyCode::Enter => {
                     let theme = Theme::ALL[*selected];
                     self.message = match self.theme.apply(theme) {
@@ -456,7 +678,17 @@ impl App {
                 }
                 _ => {}
             },
-            Mode::Browse => self.browse_key(key.code),
+            Mode::Browse => {
+                if key.modifiers.contains(KeyModifiers::SHIFT)
+                    && matches!(key.code, KeyCode::Up | KeyCode::Down)
+                {
+                    self.browser
+                        .extend_selection(if key.code == KeyCode::Down { 1 } else { -1 });
+                } else {
+                    self.browse_key(key.code);
+                }
+            }
+            Mode::Copying => unreachable!(),
             Mode::Profiles { selected } => {
                 let entries = Self::home_entries(&self.store, self.home_folder.as_deref());
                 let entry = entries.get(*selected).cloned();
@@ -669,14 +901,14 @@ impl App {
                 }
                 _ => {}
             },
-            Mode::Diff { view, selected } => match key.code {
+            Mode::Diff { view, selected, .. } => match key.code {
                 KeyCode::F(direction @ 5..=8) => {
                     let whole = matches!(direction, 7 | 8);
                     if !whole && !view.lines.get(*selected).is_some_and(|line| line.changed) {
                         self.message = "Select a changed chunk first (n/p)".into();
                     } else {
                         let to_right = matches!(direction, 5 | 7);
-                        self.pending_copy = Some((to_right, whole));
+                        self.pending_copy = Some(PendingCopy::Diff { to_right, whole });
                         self.message = format!(
                             "Overwrite {} {}? y confirm / any other key cancel. Remote writes are not atomic.",
                             if to_right {
@@ -694,7 +926,8 @@ impl App {
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     self.mode = Mode::Browse;
-                    self.refresh();
+                    self.message =
+                        "Comparison retained · r quick refresh · F5 full comparison".into();
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     *selected = (*selected + 1).min(view.lines.len().saturating_sub(1))
@@ -826,6 +1059,7 @@ impl App {
         self.browser.apply_ignores(&profile.ignores);
         self.profile = Some(profile);
         self.browser.rebuild();
+        self.log_display_snapshot("ignore_applied");
         self.message = format!(
             "Ignoring {pattern} on both sides{} · comparison kept; no rescan",
             if saved {
@@ -837,20 +1071,44 @@ impl App {
     }
 
     fn refresh(&mut self) -> bool {
+        self.refresh_as(ComparisonMode::Quick)
+    }
+
+    fn refresh_as(&mut self, mode: ComparisonMode) -> bool {
+        let mode = mode.for_checks(self.quick_check());
+        let started = Instant::now();
         self.generation += 1;
         if let (Some(worker), Some(profile)) = (&mut self.worker, &self.profile) {
-            match worker.refresh(self.generation, profile.ignores.clone()) {
+            match worker.refresh(
+                self.generation,
+                profile.ignores.clone(),
+                profile.effective_parallelism(self.theme.parallel_comparisons),
+                mode,
+                profile.quick_check,
+            ) {
                 Ok(()) => {
+                    self.comparison_mode = mode;
+                    self.comparison_timer.start(started);
                     self.busy = true;
                     self.loading_diff = false;
                     self.browser.rows.clear();
                     self.browser.rebuild();
-                    self.message = "Rescanning — entries appear as folders are listed".into();
+                    self.message = format!(
+                        "{} — entries appear as folders are listed",
+                        mode.label(profile.quick_check)
+                    );
                     return true;
                 }
-                Err(error) => self.message = error,
+                Err(error) => {
+                    self.comparison_timer
+                        .finish(started.elapsed(), Outcome::Failed);
+                    self.message = error;
+                }
             }
         }
+        self.comparison_timer.stop(Outcome::Failed);
+        self.busy = false;
+        self.loading_diff = false;
         false
     }
 
@@ -864,21 +1122,53 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.browser.move_selection(-1),
             KeyCode::PageDown => self.browser.move_selection(20),
             KeyCode::PageUp => self.browser.move_selection(-20),
-            KeyCode::Home => self.browser.selected = 0,
-            KeyCode::End => self.browser.selected = self.browser.visible.len().saturating_sub(1),
+            KeyCode::Home => self.browser.select_index(0),
+            KeyCode::End => self
+                .browser
+                .select_index(self.browser.visible.len().saturating_sub(1)),
+            KeyCode::F(direction @ 7..=8) => {
+                let paths = self.browser.copy_paths();
+                if paths.is_empty() {
+                    self.message = "Select a file or folder first".into();
+                } else if self.worker.is_none() {
+                    self.message = "Reopen the comparison to reconnect before copying".into();
+                } else {
+                    self.cancel_diff();
+                    let to_right = direction == 7;
+                    self.message = format!(
+                        "Copy {} selected file(s)/folder(s) {}? Existing files will be overwritten; folders copy recursively (ignores honored). y confirm / any other key cancel. Remote writes are not atomic; no rollback.",
+                        paths.len(),
+                        if to_right {
+                            "LEFT → RIGHT"
+                        } else {
+                            "RIGHT → LEFT"
+                        },
+                    );
+                    self.pending_copy = Some(PendingCopy::Entries { paths, to_right });
+                }
+            }
             KeyCode::Char('n') => self.browser.next_difference(false),
             KeyCode::Char('p') => self.browser.next_difference(true),
-            KeyCode::Char('d') => self.browser.toggle_differences(),
+            KeyCode::Char('d') => {
+                self.browser.toggle_differences();
+                self.log_display_snapshot("filter_changed");
+            }
             KeyCode::Char('f') => {
                 self.browser.recursive = !self.browser.recursive;
                 self.browser.rebuild();
+                self.log_display_snapshot("recursive_view_changed");
             }
-            KeyCode::Backspace | KeyCode::Left => self.browser.parent(),
+            KeyCode::Backspace | KeyCode::Left => {
+                self.browser.parent();
+                self.log_display_snapshot("navigate_parent");
+            }
             KeyCode::Enter | KeyCode::Right => {
                 if let Some(row) = self.browser.selected_row().cloned() {
                     if row.is_directory() {
                         self.browser.enter(&row.path);
+                        self.log_display_snapshot("navigate_directory");
                     } else if row.is_file_pair() && !self.loading_diff {
+                        self.comparison_timer.stop(Outcome::Interrupted);
                         self.generation += 1;
                         if let Some(worker) = &mut self.worker {
                             match worker.diff(self.generation, row.path) {
@@ -898,6 +1188,13 @@ impl App {
             KeyCode::Char('i') => self.ignore_selected(),
             KeyCode::Char('r') => {
                 self.refresh();
+            }
+            KeyCode::F(5) => {
+                self.refresh_as(ComparisonMode::Full);
+            }
+            KeyCode::Esc if !self.busy && !self.browser.marked.is_empty() => {
+                self.browser.clear_marks();
+                self.message = "Selection cleared".into();
             }
             KeyCode::Esc | KeyCode::Char('c') => {
                 if let Some(worker) = &self.worker {

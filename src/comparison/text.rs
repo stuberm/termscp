@@ -1,4 +1,4 @@
-//! Bounded UTF-8 diff and chunk merging. Retains CRLF and final-newline differences.
+//! Bounded UTF-8 diff and chunk merging. Ignores CRLF versus LF differences.
 use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -224,10 +224,12 @@ pub fn diff_documents(title: String, left: Document, right: Document) -> TextVie
 }
 
 pub fn diff(title: String, left: &str, right: &str) -> TextView {
+    let normalized_left = left.replace("\r\n", "\n");
+    let normalized_right = right.replace("\r\n", "\n");
     let diff = TextDiff::configure()
         .algorithm(Algorithm::Myers)
         .timeout(Duration::from_secs(2))
-        .diff_lines(left, right);
+        .diff_lines(&normalized_left, &normalized_right);
     let mut lines = Vec::new();
     let mut removed = Vec::new();
     let mut added = Vec::new();
@@ -377,8 +379,14 @@ mod tests {
     #[test]
     fn retains_newline_changes_and_aligns_replacements() {
         let view = diff("test".into(), "a\r\nb\n", "a\nb");
-        assert!(view.lines.iter().all(|line| line.changed));
-        assert!(view.lines[0].left.as_ref().unwrap().1.contains('␍'));
+        assert!(!view.lines[0].changed);
+        assert!(view.lines[1].changed);
+        assert!(
+            diff("endings".into(), "a\r\nb\r\n", "a\nb\n")
+                .lines
+                .iter()
+                .all(|line| !line.changed)
+        );
         assert!(
             view.lines[1]
                 .right

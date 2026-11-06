@@ -17,6 +17,11 @@ remain visible independently of color. The choice is stored atomically in
 to Mocha. The terminal option uses terminal colors for the UI and retains the
 original dark syntax palette.
 
+The same file also stores the general `parallel_comparisons` default (1–16,
+4 when omitted). F4 Settings exposes this alongside Themes. Changing either
+preference preserves the other. Profiles can inherit this default or override it;
+see [Parallel comparisons](../usage/folder-comparison.md#parallel-comparisons).
+
 Tokyo Night follows the [terminalcolors.com Default palette](https://terminalcolors.com/themes/tokyo-night/):
 background `#1a1b26`, text `#c0caf5`, selection background `#283457`, and blue accent
 `#7aa2f7`. Muted text uses ANSI white `#a9b1d6`, borders use bright black `#414868`,

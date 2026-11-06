@@ -24,10 +24,7 @@
     "**/*-lock.json",
     "Cargo.lock",
     "docs/book",
-    "docs/zh-CN/cli/cli.md",
-    "docs/zh-CN/configuration/explorer-format.md",
-    "docs/zh-CN/configuration/themes.md",
-    "docs/zh-CN/usage/keyboard-shortcuts.md",
+    "vendor/remotefs-ssh",
     "**/tests/fixtures"
   ],
   "plugins": [

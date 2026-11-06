@@ -6,6 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::Side;
 use crate::comparison::connection::{ConnectionSettings, Credentials, Secrets};
 use crate::comparison::profiles::{Endpoint, Profile};
+use crate::comparison::settings::{Parallelism, QuickCheck};
 use crate::filetransfer::params::{
     AwsS3Params, GenericProtocolParams, GoogleCloudStorageParams, KubeProtocolParams, SmbDialect,
     SmbParams, WebDAVProtocolParams,
@@ -579,6 +580,8 @@ pub(super) struct Editor {
     pub source: EndpointInput,
     pub destination: EndpointInput,
     pub ignores: String,
+    pub parallel_comparisons: Option<Parallelism>,
+    pub quick_check: QuickCheck,
     pub field: usize,
     pub original: Option<String>,
 }
@@ -598,6 +601,8 @@ impl Editor {
             ignores: profile
                 .map(|profile| profile.ignores.join("; "))
                 .unwrap_or_default(),
+            parallel_comparisons: profile.and_then(|profile| profile.parallel_comparisons),
+            quick_check: profile.map_or_else(QuickCheck::default, |profile| profile.quick_check),
             field: 0,
             original,
         }
@@ -605,6 +610,60 @@ impl Editor {
 
     pub fn ignore_index(&self) -> usize {
         1 + self.source.field_ids().len() + self.destination.field_ids().len()
+    }
+
+    pub fn parallelism_index(&self) -> usize {
+        self.ignore_index() + 1
+    }
+
+    pub fn quick_size_index(&self) -> usize {
+        self.parallelism_index() + 1
+    }
+    pub fn quick_timestamp_index(&self) -> usize {
+        self.quick_size_index() + 1
+    }
+
+    fn quick_check_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Char('u') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.quick_check = QuickCheck::default();
+        } else if matches!(
+            key.code,
+            KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right
+        ) {
+            self.quick_check = if self.field == self.quick_size_index() {
+                self.quick_check.toggle_size()
+            } else {
+                self.quick_check.toggle_timestamp()
+            };
+        }
+    }
+
+    pub fn parallelism_label(&self, general_default: Parallelism) -> String {
+        self.parallel_comparisons.map_or_else(
+            || format!("Use default ({})", general_default.get()),
+            |value| value.get().to_string(),
+        )
+    }
+
+    fn parallelism_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Char('u') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.parallel_comparisons = None;
+            return;
+        }
+        let forward = match key.code {
+            KeyCode::Right | KeyCode::Char(' ' | '+') => true,
+            KeyCode::Left | KeyCode::Char('-') => false,
+            _ => return,
+        };
+        // Zero is the inheriting choice; explicit values remain distinct even
+        // when they happen to equal today's general default.
+        let index = self.parallel_comparisons.map_or(0, Parallelism::get);
+        let index = if forward {
+            (index + 1) % (Parallelism::MAX + 1)
+        } else {
+            (index + Parallelism::MAX) % (Parallelism::MAX + 1)
+        };
+        self.parallel_comparisons = Parallelism::try_from(index).ok();
     }
 
     pub fn selected(&self, side: Side) -> Option<usize> {
@@ -626,7 +685,7 @@ impl Editor {
     }
 
     pub fn key(&mut self, key: KeyEvent) {
-        let count = self.ignore_index() + 1;
+        let count = self.quick_timestamp_index() + 1;
         match key.code {
             KeyCode::Tab | KeyCode::Down => self.field = (self.field + 1) % count,
             KeyCode::BackTab | KeyCode::Up => self.field = (self.field + count - 1) % count,
@@ -638,6 +697,12 @@ impl Editor {
                     edit_text(&mut self.name, key);
                 } else if self.field == self.ignore_index() {
                     edit_text(&mut self.ignores, key);
+                } else if self.field == self.parallelism_index() {
+                    self.parallelism_key(key);
+                } else if self.field == self.quick_size_index()
+                    || self.field == self.quick_timestamp_index()
+                {
+                    self.quick_check_key(key);
                 } else if let Some(index) = self.selected(Side::Source) {
                     self.source.key(self.source.field_ids()[index], key);
                 } else if let Some(index) = self.selected(Side::Destination) {
@@ -671,7 +736,11 @@ impl Editor {
             .filter(|value| !value.is_empty())
             .map(str::to_owned)
             .collect();
-        Profile::from_endpoints(self.name.trim().into(), source, destination, ignores)
+        let mut profile =
+            Profile::from_endpoints(self.name.trim().into(), source, destination, ignores)?;
+        profile.parallel_comparisons = self.parallel_comparisons;
+        profile.quick_check = self.quick_check;
+        Ok(profile)
     }
 }
 
@@ -680,6 +749,95 @@ mod tests {
     use super::*;
     fn press(editor: &mut Editor, code: KeyCode) {
         editor.key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    #[test]
+    fn profile_parallelism_cycles_defaults_overrides_and_roundtrips_without_materializing_defaults()
+    {
+        let general_default = Parallelism::try_from(8).unwrap();
+        let mut editor = Editor::new(None, None);
+        editor.name = "test".into();
+        editor.source.kind = EndpointType::Url;
+        editor.source.location = "sftp://source/folder".into();
+        editor.destination.kind = EndpointType::Url;
+        editor.destination.location = "sftp://destination/folder".into();
+        editor.field = editor.parallelism_index();
+        assert_eq!(editor.parallelism_label(general_default), "Use default (8)");
+        assert_eq!(editor.profile().unwrap().parallel_comparisons, None);
+        press(&mut editor, KeyCode::Right);
+        assert_eq!(editor.parallelism_label(general_default), "1");
+        press(&mut editor, KeyCode::Left);
+        assert_eq!(editor.parallel_comparisons, None);
+        press(&mut editor, KeyCode::Left);
+        assert_eq!(editor.parallel_comparisons.unwrap().get(), Parallelism::MAX);
+        press(&mut editor, KeyCode::Char(' '));
+        assert_eq!(editor.parallel_comparisons, None);
+        for _ in 0..8 {
+            press(&mut editor, KeyCode::Right);
+        }
+        let profile = editor.profile().unwrap();
+        assert_eq!(profile.parallel_comparisons, Some(general_default));
+        let mut restored = Editor::new(Some(&profile), Some(profile.name.clone()));
+        assert_eq!(
+            restored.profile().unwrap().parallel_comparisons,
+            profile.parallel_comparisons
+        );
+        assert_eq!(restored.parallelism_label(Parallelism::default()), "8");
+        restored.field = restored.parallelism_index();
+        restored.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert_eq!(restored.profile().unwrap().parallel_comparisons, None);
+        press(&mut restored, KeyCode::Tab);
+        assert_eq!(restored.field, restored.quick_size_index());
+    }
+
+    #[test]
+    fn quick_checkboxes_default_both_toggle_independently_and_allow_disabling() {
+        let mut editor = Editor::new(None, None);
+        editor.name = "checks".into();
+        editor.source.kind = EndpointType::Url;
+        editor.source.location = "sftp://source/folder".into();
+        editor.destination.kind = EndpointType::Url;
+        editor.destination.location = "ftp://destination/folder".into();
+        assert_eq!(editor.quick_check, QuickCheck::Both);
+        editor.field = editor.quick_timestamp_index();
+        press(&mut editor, KeyCode::Char(' '));
+        assert_eq!(editor.profile().unwrap().quick_check, QuickCheck::Size);
+        press(&mut editor, KeyCode::BackTab);
+        assert_eq!(editor.field, editor.quick_size_index());
+        press(&mut editor, KeyCode::Char(' '));
+        assert_eq!(editor.profile().unwrap().quick_check, QuickCheck::None);
+        press(&mut editor, KeyCode::Tab);
+        press(&mut editor, KeyCode::Right);
+        assert_eq!(editor.quick_check, QuickCheck::Timestamp);
+        press(&mut editor, KeyCode::BackTab);
+        press(&mut editor, KeyCode::Left);
+        assert_eq!(editor.profile().unwrap().quick_check, QuickCheck::Both);
+        press(&mut editor, KeyCode::Tab);
+        press(&mut editor, KeyCode::Char(' '));
+        assert_eq!(editor.quick_check, QuickCheck::Size);
+        press(&mut editor, KeyCode::BackTab);
+        press(&mut editor, KeyCode::Char(' '));
+        assert_eq!(editor.quick_check, QuickCheck::None);
+        press(&mut editor, KeyCode::Tab);
+        editor.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert_eq!(editor.quick_check, QuickCheck::Both);
+        press(&mut editor, KeyCode::Tab);
+        assert_eq!(editor.field, 0);
+        for check in [
+            QuickCheck::None,
+            QuickCheck::Both,
+            QuickCheck::Size,
+            QuickCheck::Timestamp,
+        ] {
+            editor.quick_check = check;
+            let profile = editor.profile().unwrap();
+            let mut restored = Editor::new(Some(&profile), Some(profile.name.clone()));
+            assert_eq!(restored.quick_check, check);
+            // Endpoint-type changes must not silently reset the comparison policy.
+            press(&mut restored, KeyCode::F(2));
+            press(&mut restored, KeyCode::Right);
+            assert_eq!(restored.quick_check, check);
+        }
     }
 
     #[test]
@@ -782,7 +940,7 @@ mod tests {
         let mut editor = Editor::new(None, None);
         for choice in EndpointInput::choices() {
             editor.source.change_type(choice);
-            let count = editor.ignore_index() + 1;
+            let count = editor.quick_timestamp_index() + 1;
             editor.field = 0;
             for expected in 0..count {
                 assert_eq!(editor.field, expected);

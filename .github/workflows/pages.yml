@@ -37,14 +37,11 @@ jobs:
         run: cargo install mdbook-mermaid
       - name: Build en-US
         run: mdbook build docs/en-US
-      - name: Build zh-CN
-        run: mdbook build docs/zh-CN
       - name: Assemble site
         run: |
           rm -rf site_out
-          mkdir -p site_out/en-US site_out/zh-CN
+          mkdir -p site_out/en-US
           cp -r docs/en-US/book/* site_out/en-US/
-          cp -r docs/zh-CN/book/* site_out/zh-CN/
           cp -r docs/shared site_out/shared
           cp docs/shared/og_preview.jpg site_out/og_preview.jpg
           cp docs/shared/favicon.ico site_out/favicon.ico

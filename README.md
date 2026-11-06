@@ -41,7 +41,7 @@ cargo run --no-default-features --features keyring -- compare --profile website
 cargo run --no-default-features --features keyring -- compare
 ```
 
-The last command is an alias for starting sidemirror without arguments: both open the saved-comparisons home screen. Either endpoint may also be a remote URL or `bookmark:NAME`, including remote-to-remote comparisons. Comparison profiles are separate from connection bookmarks; older left/right profiles are loaded automatically and migrated to typed source/destination data on the next save. Use Enter to open a directory/file, `d` to filter differences, `f` for recursive rows, `n`/`p` to jump differences, `r` to refresh, `c` to cancel, `o` for profiles, and `q` to quit. Comparison never writes to either endpoint. Passwords and S3 secret access keys entered in masked endpoint fields are saved in the native OS credential store after successful authentication; temporary S3 tokens remain ephemeral. Credential profiles/connection bookmarks are also supported. Secrets are never written into comparison profile files. Existing version-1/2 profiles load automatically and are written as version 3 on the next save.
+The last command is an alias for starting sidemirror without arguments: both open the saved-comparisons home screen. Either endpoint may also be a remote URL or `bookmark:NAME`, including remote-to-remote comparisons. Comparison profiles are separate from connection bookmarks; older left/right profiles are loaded automatically and migrated to typed source/destination data on the next save. Use Enter to open a directory/file, `d` to filter differences, `f` for recursive rows, `n`/`p` to jump differences, `r` to refresh using the profile's Size/Timestamp checkboxes (both on by default; both off runs full verification), **F5 in folder view for full content comparison**, `c` to cancel, `o` for profiles, and `q` to quit. Comparison opens in quick mode unless both checks are disabled: **≈ quick match** means metadata matches, not verified contents. Full comparison checks normalized file contents, including quick matches. Scanning never writes to either endpoint. Passwords and S3 secret access keys entered in masked endpoint fields are saved in the native OS credential store after successful authentication; temporary S3 tokens remain ephemeral. Credential profiles/connection bookmarks are also supported. Secrets are never written into comparison profile files. Existing version-1/2 profiles load automatically and are written as version 3 on the next save.
 
 See [comparison documentation](docs/en-US/usage/folder-comparison.md) for details. The inherited SFTP client currently **does not verify server host keys**; use trusted endpoints only.
 
@@ -59,7 +59,7 @@ The inherited website, published packages, installer scripts, and release-distri
 
 ## Documentation and development
 
-Documentation is under `docs/en-US/` and `docs/zh-CN/`. Some inherited pages describe upstream functionality and resources.
+Documentation is under `docs/en-US/`. Some inherited pages describe upstream functionality and resources.
 
 ```sh
 cargo check --no-default-features --features keyring

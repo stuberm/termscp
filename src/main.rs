@@ -53,10 +53,27 @@ fn main() -> MainResult<()> {
     if let Err(err) = logging::init(run_opts.log_level) {
         eprintln!("Failed to initialize logging: {err}");
     }
+    let comparison_log = comparison::diagnostics::init_from_env()?;
+    if let Some(path) = &comparison_log {
+        eprintln!("Comparison diagnostics enabled: {}", path.display());
+    }
     info!("{APP_NAME} v{SIDEMIRROR_VERSION} - Developed by {SIDEMIRROR_AUTHORS}");
     // Run
     info!("Starting sidemirror...");
-    run(run_opts)
+    let result = run(run_opts);
+    let diagnostics_complete = comparison::diagnostics::finish_session(result.is_ok());
+    if let Some(path) = comparison_log {
+        eprintln!(
+            "Comparison diagnostics {}: {}",
+            if diagnostics_complete {
+                "saved"
+            } else {
+                "incomplete (write failure)"
+            },
+            path.display()
+        );
+    }
+    result
 }
 
 /// Parse arguments

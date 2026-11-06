@@ -1,26 +1,77 @@
 //! Read-only recursive comparison, independent of the terminal UI.
+mod cache;
 pub mod connection;
+mod copy;
+#[cfg(test)]
+mod copy_tests;
 pub mod credentials;
+pub(crate) mod diagnostics;
 pub mod filesystem;
+mod hashing;
+mod line_endings;
+mod parallel;
+#[cfg(test)]
+mod probe_tests;
 pub mod profiles;
+mod quick;
+#[cfg(test)]
+mod scoped_tests;
+pub mod settings;
 #[cfg(test)]
 mod stream_tests;
 mod syntax;
 pub mod text;
+mod webdav_version;
 pub mod worker;
 
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(test)]
 use std::time::{Duration, Instant};
 
 use filesystem::{CompareFs, Entry, Kind};
+
+/// Quick uses listing metadata only; Full verifies normalized file contents.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ComparisonMode {
+    #[default]
+    Quick,
+    Full,
+}
+
+impl ComparisonMode {
+    /// Disabling metadata shortcuts always selects full verification, never equality.
+    pub fn for_checks(self, checks: settings::QuickCheck) -> Self {
+        if checks == settings::QuickCheck::None {
+            Self::Full
+        } else {
+            self
+        }
+    }
+
+    pub fn label(self, checks: settings::QuickCheck) -> &'static str {
+        match self {
+            Self::Quick => match checks {
+                settings::QuickCheck::None => "Full · normalized contents",
+                settings::QuickCheck::Size => "Quick · size only (not content verified)",
+                settings::QuickCheck::Timestamp => {
+                    "Quick · modified time only (not content verified)"
+                }
+                settings::QuickCheck::Both => "Quick · size + modified time (not content verified)",
+            },
+            Self::Full => "Full · normalized contents",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Pending,
     Equal,
+    QuickMatch,
     Different,
     LeftOnly,
     RightOnly,
@@ -30,10 +81,15 @@ pub enum Status {
 }
 
 impl Status {
+    pub fn is_match(self) -> bool {
+        matches!(self, Self::Equal | Self::QuickMatch)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Pending => "… pending",
             Self::Equal => "= equal",
+            Self::QuickMatch => "≈ quick match",
             Self::Different => "≠ different",
             Self::LeftOnly => "< left only",
             Self::RightOnly => "> right only",
@@ -100,9 +156,66 @@ fn inventory(
     emit: &mut impl FnMut(ScanEvent),
     side: &str,
     discovered: &mut BTreeMap<PathBuf, Row>,
+    roots: Option<&[PathBuf]>,
 ) -> Inventory {
     let mut result = Inventory::default();
-    let mut directories = vec![PathBuf::new()];
+    let mut directories = Vec::new();
+    if let Some(roots) = roots {
+        // Parent directories may have been created by a file copy. Inspect their
+        // metadata too, without descending into unrelated sibling subtrees.
+        let paths: std::collections::BTreeSet<_> = roots
+            .iter()
+            .flat_map(|path| path.ancestors())
+            .filter(|path| !path.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .collect();
+        for path in &paths {
+            if cancelled(cancel) {
+                break;
+            }
+            if is_ignored(path, ignores) {
+                continue;
+            }
+            let mut row = Row {
+                path: path.clone(),
+                left: None,
+                right: None,
+                status: Status::Pending,
+                detail: String::new(),
+                aggregate_base: None,
+            };
+            match copy::entry(fs, path) {
+                Ok(Some(entry)) => {
+                    if !roots.contains(path) && entry.kind != Kind::Directory {
+                        let error =
+                            "Copied path ancestor is no longer a regular directory".to_string();
+                        result.errors.insert(path.clone(), error.clone());
+                        row.status = Status::Error;
+                        row.detail = error;
+                    }
+                    if entry.kind == Kind::Directory && roots.contains(path) {
+                        directories.push(path.clone());
+                    }
+                    if side == "left" {
+                        row.left = Some(entry.clone());
+                    } else {
+                        row.right = Some(entry.clone());
+                    }
+                    result.entries.insert(path.clone(), entry);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    result.errors.insert(path.clone(), error.clone());
+                    row.status = Status::Error;
+                    row.detail = error;
+                }
+            }
+            discovered.insert(path.clone(), row.clone());
+            emit(ScanEvent::Rows(vec![row]));
+        }
+    } else {
+        directories.push(PathBuf::new());
+    }
     while let Some(directory) = directories.pop() {
         if cancelled(cancel) {
             break;
@@ -194,6 +307,7 @@ fn ancestor_error<'a>(errors: &'a BTreeMap<PathBuf, String>, path: &Path) -> Opt
 }
 
 /// Reads and finalizes both streams even on cancellation or I/O failure.
+#[cfg(test)]
 fn contents_equal(
     left: &mut dyn CompareFs,
     right: &mut dyn CompareFs,
@@ -209,6 +323,8 @@ fn contents_equal(
         }
     };
     let result = (|| {
+        let mut a = line_endings::Normalized::new(&mut a);
+        let mut b = line_endings::Normalized::new(&mut b);
         let mut a_buffer = [0; 64 * 1024];
         let mut b_buffer = [0; 64 * 1024];
         loop {
@@ -233,6 +349,7 @@ fn contents_equal(
     result
 }
 
+#[cfg(test)]
 fn read_chunk(reader: &mut impl Read, buffer: &mut [u8]) -> std::io::Result<usize> {
     let mut len = 0;
     while len < buffer.len() {
@@ -246,8 +363,8 @@ fn read_chunk(reader: &mut impl Read, buffer: &mut [u8]) -> std::io::Result<usiz
     Ok(len)
 }
 
-/// Returns a complete snapshot, or a conservative partial snapshot if cancelled.
-/// No metadata-only match is classified as equal for regular files.
+/// Sequential reference scanner for stream and inventory regression tests.
+#[cfg(test)]
 pub fn scan(
     left: &mut dyn CompareFs,
     right: &mut dyn CompareFs,
@@ -256,47 +373,43 @@ pub fn scan(
     mut emit: impl FnMut(ScanEvent),
 ) -> Vec<Row> {
     let mut discovered = BTreeMap::new();
-    let a = inventory(left, ignores, cancel, &mut emit, "left", &mut discovered).errors;
-    let b = inventory(right, ignores, cancel, &mut emit, "right", &mut discovered).errors;
+    let a = inventory(
+        left,
+        ignores,
+        cancel,
+        &mut emit,
+        "left",
+        &mut discovered,
+        None,
+    )
+    .errors;
+    let b = inventory(
+        right,
+        ignores,
+        cancel,
+        &mut emit,
+        "right",
+        &mut discovered,
+        None,
+    )
+    .errors;
     let mut rows: Vec<Row> = discovered.into_values().collect();
     let mut updates = Vec::new();
     let mut last_update = Instant::now();
     for row in &mut rows {
-        if let Some(error) = ancestor_error(&a, &row.path).or_else(|| ancestor_error(&b, &row.path))
-        {
-            row.status = Status::Error;
-            row.detail = error.clone();
-        } else if cancelled(cancel) {
-            row.status = Status::Pending;
-        } else {
-            row.status = match (&row.left, &row.right) {
-                (Some(_), None) => Status::LeftOnly,
-                (None, Some(_)) => Status::RightOnly,
-                (Some(a), Some(b)) if a.kind != b.kind => Status::TypeConflict,
-                (Some(a), Some(_)) if a.kind == Kind::Directory => Status::Pending,
-                (Some(a), Some(_)) if a.kind != Kind::File => {
-                    row.detail = "Symlinks and special files are not followed or verified".into();
-                    Status::Unverified
+        if classify(row, &a, &b, cancel) {
+            emit(ScanEvent::Progress(format!(
+                "Verifying {}",
+                row.path.display()
+            )));
+            row.status = match contents_equal(left, right, &row.path, cancel) {
+                Ok(Some(true)) => Status::Equal,
+                Ok(Some(false)) => Status::Different,
+                Ok(None) => Status::Pending,
+                Err(error) => {
+                    row.detail = error;
+                    Status::Error
                 }
-                (Some(a), Some(b)) if a.size.zip(b.size).is_some_and(|(a, b)| a != b) => {
-                    Status::Different
-                }
-                (Some(_), Some(_)) => {
-                    emit(ScanEvent::Progress(format!(
-                        "Verifying {}",
-                        row.path.display()
-                    )));
-                    match contents_equal(left, right, &row.path, cancel) {
-                        Ok(Some(true)) => Status::Equal,
-                        Ok(Some(false)) => Status::Different,
-                        Ok(None) => Status::Pending,
-                        Err(error) => {
-                            row.detail = error;
-                            Status::Error
-                        }
-                    }
-                }
-                (None, None) => Status::Error,
             };
         }
         updates.push(row.clone());
@@ -306,8 +419,53 @@ pub fn scan(
         }
     }
     emit(ScanEvent::Rows(updates));
+    finish_scan(&mut rows, cancel);
+    rows
+}
+
+/// Return true only when a paired regular file needs content verification.
+fn classify(
+    row: &mut Row,
+    left_errors: &BTreeMap<PathBuf, String>,
+    right_errors: &BTreeMap<PathBuf, String>,
+    cancel: &AtomicBool,
+) -> bool {
+    if let Some(error) =
+        ancestor_error(left_errors, &row.path).or_else(|| ancestor_error(right_errors, &row.path))
+    {
+        row.status = Status::Error;
+        row.detail.clone_from(error);
+    } else if cancelled(cancel) {
+        row.status = Status::Pending;
+    } else {
+        row.status = match (&row.left, &row.right) {
+            (Some(_), None) => Status::LeftOnly,
+            (None, Some(_)) => Status::RightOnly,
+            (Some(a), Some(b)) if a.kind != b.kind => Status::TypeConflict,
+            (Some(a), Some(_)) if a.kind == Kind::Directory => Status::Pending,
+            (Some(a), Some(_)) if a.kind != Kind::File => {
+                row.detail = "Symlinks and special files are not followed or verified".into();
+                Status::Unverified
+            }
+            (Some(a), Some(b)) => {
+                if a.size != b.size {
+                    row.detail = "Sizes differ; checking with normalized line endings".into();
+                }
+                row.status = Status::Pending;
+                return true;
+            }
+            (None, None) => {
+                row.detail = "Path is no longer listed on either side".into();
+                Status::Error
+            }
+        };
+    }
+    false
+}
+
+fn finish_scan(rows: &mut [Row], cancel: &AtomicBool) {
     if !cancelled(cancel) {
-        for row in &mut rows {
+        for row in rows.iter_mut() {
             if row.status == Status::Pending
                 && row
                     .left
@@ -322,8 +480,7 @@ pub fn scan(
             }
         }
     }
-    aggregate(&mut rows);
-    rows
+    aggregate(rows);
 }
 
 /// Match a row or any ancestor directory against root-relative ignore globs.
@@ -361,7 +518,7 @@ pub fn aggregate(rows: &mut [Row]) {
         .collect();
     for index in (0..rows.len()).rev() {
         let status = rows[index].status;
-        if status == Status::Equal {
+        if status.is_match() {
             continue;
         }
         if let Some(parent) = rows[index]
@@ -372,7 +529,11 @@ pub fn aggregate(rows: &mut [Row]) {
             && rows[parent].is_directory()
             && matches!(
                 rows[parent].status,
-                Status::Equal | Status::Different | Status::Pending | Status::Unverified
+                Status::Equal
+                    | Status::QuickMatch
+                    | Status::Different
+                    | Status::Pending
+                    | Status::Unverified
             )
         {
             if rows[parent].aggregate_base.is_none() {
@@ -393,9 +554,11 @@ pub fn aggregate(rows: &mut [Row]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use filesystem::LocalFs;
     use std::fs;
+
+    use filesystem::LocalFs;
+
+    use super::*;
 
     fn fixture() -> (tempfile::TempDir, tempfile::TempDir) {
         (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap())

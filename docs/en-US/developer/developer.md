@@ -40,6 +40,131 @@ In addition to the 3 core modules, others have been added over time:
 sidemirror supports the following protocols: SFTP, SCP, FTP/FTPS, Kube, S3, GCS,
 SMB and WebDAV.
 
+## Comparison CPU benchmarks
+
+Two ignored tests provide repeatable CPU-focused workloads without remote servers
+or persistent user data:
+
+```sh
+cargo test --release --no-default-features --features github-actions normalization_cpu_benchmark -- --ignored --nocapture
+cargo test --release --no-default-features --features github-actions browser_render_cpu_benchmark -- --ignored --nocapture
+```
+
+The normalization test reports raw MiB/s for in-memory LF text, CRLF text, binary
+bytes and lone CR bytes, checking normalized lengths and raw-byte accounting. The
+rendering test draws 100 fixed-size frames with inventories of 100 and 100,000
+entries using a terminal test backend. Setup is excluded from the measured loops.
+Compare the same build profile and machine; these are microbenchmarks, not
+predictions of complete remote-comparison timings. They have no timing thresholds
+and are excluded from normal test runs.
+
+The comparison UI keeps derived equal-entry counts outside rendering and only
+rebuilds visible paths when membership/order can change. Unchanged idle screens
+do not redraw; background/timer redraws are coalesced at 100 ms, while input and
+resize redraws bypass that throttle. Normalization uses bounded buffered input
+and bulk copies/searches. Only CRLF is normalized: lone CR, other whitespace,
+binary bytes and final-newline differences remain significant. Hash/cache
+semantics and verification safeguards must remain unchanged by CPU optimizations.
+
+## Quick and full folder comparisons
+
+`ComparisonMode` defaults to `Quick`. Opening a profile and ordinary refreshes
+use only the selected size/mtime checks on inventory `Entry` values. Profiles store
+`QuickCheck::{None, Size, Timestamp, Both}` as `quick_check` (default/omitted: Both;
+size-only is opt-in). The editor maps these four states to two checkboxes.
+Both unchecked (`"none"`) disables quick checks and selects Full, not an empty
+metadata predicate. Existing profile versions default to Both.
+Modification times are floored to UTC seconds to accommodate remote precision.
+Disabled metadata is ignored even if missing or different; missing enabled
+metadata is unverified unless another enabled check establishes a mismatch.
+`Status::QuickMatch` is intentionally distinct from content-verified `Equal`.
+Both count as matches for filtering/navigation, but quick results never seed
+content hashes. Directory aggregation preserves that distinction and uncertainty.
+
+The folder view's F5 queues a fresh `Full` scan, retaining the bounded verification
+pool, CRLF normalization, strong-version cache validation and stream finalization.
+Each scan request carries its own mode, quick-check criteria, generation and
+cancellation token. The worker applies profile criteria on initial connection and
+each refresh; the same pool setting controls scoped post-copy quick checks.
+UI, worker and pool resolve requested Quick scans to Full when criteria are None,
+including initial startup, refreshes and scoped copy checks. The metadata classifier
+also refuses to produce a vacuous match if called directly with None.
+Full scans and diff-copy verification do not use quick criteria. The
+shared pool's initial connection construction survives cancellation of the first
+scan so a full/quick replacement queued during startup can still execute.
+Ordinary r refreshes restore quick mode. Copies never queue whole-tree refreshes.
+`Pool::scan_paths` reuses classification/verification for selected paths only:
+files inspect their own metadata and parents, while selected directories recurse
+only within those subtrees. Parent metadata is refreshed without traversing
+unrelated siblings. Browser copies recheck in the existing mode; diff copies use
+full byte-normalized verification for that file rather than decoded-text equality.
+Diff reads and pre-copy checks continue to read live contents regardless of mode.
+
+Workers send generation-tagged `Updated` events before the final copy/text result.
+`Browser::apply_copy_updates` merges those observations, preserves unrelated rows
+and parent inventory uncertainty, invalidates possibly partial/cancelled writes,
+and reaggregates directory summaries without restarting the comparison timer.
+Failed rechecks never retain affected old equality claims. `Mode::Diff` owns its
+file path so a result hidden by Differences only cannot redirect the next copy to
+the browser's newly selected sibling. Esc/q always return without rescanning.
+Regression tests in `src/comparison/scoped_tests.rs` assert bounded listing/read
+scope; UI copy/diff tests cover mode/timer/selection preservation, created parents,
+partial-result uncertainty, failed copies and unchanged unrelated snapshots.
+
+`src/comparison/quick_tests.rs` asserts no quick-mode opens, fingerprints or extra
+connections and checks metadata precision, missing metadata, errors, ignores,
+aggregation and full verification after metadata matches. UI regression tests in
+`src/ui/comparison/quick_tests.rs` exercise F5/r, mode/timer rendering, replacement
+of active jobs, fresh inventories and difference filtering/navigation.
+
+## Temporary comparison session diagnostics
+
+`comparison::diagnostics` is opt-in via `SIDEMIRROR_COMPARE_LOG`. It writes a new,
+private JSONL file, independently of protocol TRACE logging. Session/scan/request
+IDs correlate classification, full verification, aggregation and displayed rows.
+File records include exact nanosecond and actual compared-second timestamps,
+signed deltas and whitelisted decision reasons. Schema version 2 records active
+quick criteria per scan/row and explicit enabled flags; reasons use only enabled
+checks, while raw equality/delta fields remain available for diagnosis. Displayed snapshots are explicitly
+not new comparison decisions. Backend labels exclude URLs/root settings; raw
+errors, profile/config dumps, credentials, hashes, contents and general keystrokes
+must never be passed to this diagnostic sink.
+
+With logging disabled, lazy record builders do not run. Logging reuses already
+available metadata and never requests extra remote or file-content reads. Tests
+cover precision/signs, reasons, JSON escaping, redaction, exclusive/private file
+creation and flushing. An isolated test subprocess enables the real sink and runs
+quick/full workers against temporary local fixtures; it never initializes the
+normal application logger or touches user profiles/logs. Its ignored fixture is
+invoked automatically by the parent regression test, not a manual-session test.
+See the English logging guide for launch commands and privacy limitations.
+
+## SFTP batching regression tests
+
+Repository builds patch `remotefs-ssh` using the licensed source copy under
+`vendor/remotefs-ssh`. The production change is confined to the Russh reader's
+adaptive batch windows and pending-transfer error propagation, plus feature gates
+for unused blocking-backend helpers in Russh-only builds. Do not edit the
+global Cargo registry cache. See `vendor/remotefs-ssh/SIDEMIRROR.md` for upstream
+provenance, the exact patch scope, benchmarks, upgrade notes and distribution
+limitations (Cargo strips patch overrides when publishing crates).
+
+```sh
+# Real SFTP framing over a local in-memory transport; no Docker or SSH needed.
+cargo test --manifest-path vendor/remotefs-ssh/Cargo.toml --no-default-features --features russh sftp_reader_tests
+
+# Manual bandwidth-simulated benchmark; no timing thresholds.
+cargo test --manifest-path vendor/remotefs-ssh/Cargo.toml --no-default-features --features russh sftp_batching_benchmark -- --ignored --nocapture
+
+# Actual OpenSSH integration tests; requires Docker.
+cargo test --manifest-path vendor/remotefs-ssh/Cargo.toml --no-default-features --features russh ssh::sftp::tests::russh -- --test-threads=1
+```
+
+For Docker contexts with a non-default socket, set `DOCKER_HOST` to the context's
+endpoint before running the OpenSSH tests. The fixture uses temporary containers
+and verifies a comparison-style early close followed by a full 20 MiB read over
+the same connection, in addition to existing ranges/seek/write tests.
+
 ## Activities
 
 This paragraph gives a short overview of activities. Read the code and the

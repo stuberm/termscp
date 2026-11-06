@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use super::connection::ConnectionSettings;
+use super::settings::{Parallelism, QuickCheck};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -94,6 +95,12 @@ pub struct Profile {
     pub destination: Endpoint,
     #[serde(default)]
     pub ignores: Vec<String>,
+    /// None inherits the current general preference, including on refresh.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parallel_comparisons: Option<Parallelism>,
+    /// Both by default; None disables shortcuts and runs full content verification.
+    #[serde(default, skip_serializing_if = "QuickCheck::is_default")]
+    pub quick_check: QuickCheck,
 }
 
 impl Profile {
@@ -126,9 +133,15 @@ impl Profile {
                 .normalized()
                 .map_err(|error| format!("Destination: {error}"))?,
             ignores,
+            parallel_comparisons: None,
+            quick_check: QuickCheck::default(),
         };
         profile.validate()?;
         Ok(profile)
+    }
+
+    pub fn effective_parallelism(&self, general_default: Parallelism) -> Parallelism {
+        self.parallel_comparisons.unwrap_or(general_default)
     }
 
     pub fn has_remote(&self) -> bool {
@@ -231,6 +244,8 @@ impl ProfileStore {
                                     source: Endpoint::Local { path: old.left },
                                     destination: Endpoint::from_input(&old.right)?,
                                     ignores: old.ignores,
+                                    parallel_comparisons: None,
+                                    quick_check: QuickCheck::default(),
                                 },
                             ))
                         })
@@ -442,6 +457,12 @@ mod tests {
         assert!(saved["profiles"]["existing"].get("left").is_none());
         assert_eq!(ProfileStore::load(path).unwrap().profiles, store.profiles);
         assert_eq!(store.profiles.len(), 2);
+        assert!(
+            store
+                .profiles
+                .values()
+                .all(|profile| profile.parallel_comparisons.is_none())
+        );
     }
 
     #[test]
@@ -555,6 +576,7 @@ mod tests {
             3
         );
         assert_eq!(store.profiles["old"].ignores, vec![".git"]);
+        assert_eq!(store.profiles["old"].parallel_comparisons, None);
         for secret in [
             "password-value",
             "secret-key-value",
@@ -563,6 +585,154 @@ mod tests {
         ] {
             assert!(!contents.contains(secret));
         }
+    }
+
+    #[test]
+    fn parallelism_inherits_live_defaults_and_override_survives_save_rename_and_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("comparisons.json");
+        let mut store = ProfileStore::load(path.clone()).unwrap();
+        let mut profile = Profile::new(
+            "test".into(),
+            "sftp://source/folder",
+            "sftp://destination/folder",
+            vec![],
+        )
+        .unwrap();
+        let two = Parallelism::try_from(2).unwrap();
+        let eight = Parallelism::try_from(8).unwrap();
+        assert_eq!(profile.parallel_comparisons, None);
+        assert_eq!(profile.effective_parallelism(two), two);
+        assert_eq!(profile.effective_parallelism(eight), eight);
+        store.save(profile.clone()).unwrap();
+        assert!(
+            serde_json::to_value(&profile)
+                .unwrap()
+                .get("parallel_comparisons")
+                .is_none()
+        );
+        profile.parallel_comparisons = Some(two);
+        assert_eq!(profile.effective_parallelism(eight), two);
+        store.update("test", profile.clone()).unwrap();
+        profile.name = "renamed".into();
+        store.update("test", profile.clone()).unwrap();
+        let restored = ProfileStore::load(path.clone()).unwrap();
+        assert_eq!(restored.profiles["renamed"].parallel_comparisons, Some(two));
+        profile.parallel_comparisons = None;
+        store.update("renamed", profile).unwrap();
+        let restored = ProfileStore::load(path).unwrap();
+        assert_eq!(
+            restored.profiles["renamed"].effective_parallelism(eight),
+            eight
+        );
+    }
+
+    #[test]
+    fn profile_parallelism_rejects_invalid_overrides_but_accepts_null() {
+        let profile = Profile::new(
+            "test".into(),
+            "sftp://source/folder",
+            "sftp://destination/folder",
+            vec![],
+        )
+        .unwrap();
+        let mut value = serde_json::to_value(profile).unwrap();
+        for invalid in [
+            serde_json::json!(0),
+            serde_json::json!(17),
+            serde_json::json!(-1),
+            serde_json::json!("4"),
+        ] {
+            value["parallel_comparisons"] = invalid;
+            assert!(serde_json::from_value::<Profile>(value.clone()).is_err());
+        }
+        value["parallel_comparisons"] = serde_json::Value::Null;
+        assert_eq!(
+            serde_json::from_value::<Profile>(value)
+                .unwrap()
+                .parallel_comparisons,
+            None
+        );
+    }
+
+    #[test]
+    fn quick_checks_default_off_for_size_only_and_survive_save_rename_and_duplicate() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("profiles.json");
+        let mut store = ProfileStore::load(path.clone()).unwrap();
+        let mut profile = Profile::new(
+            "test".into(),
+            "sftp://source/folder",
+            "ftp://destination/folder",
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(profile.quick_check, QuickCheck::Both);
+        assert!(
+            serde_json::to_value(&profile)
+                .unwrap()
+                .get("quick_check")
+                .is_none()
+        );
+        // Missing fields in v2/v3 documents preserve the previous both-checks policy.
+        for version in [2, 3] {
+            fs::write(
+                &path,
+                serde_json::to_vec(&serde_json::json!({
+                    "version": version, "profiles": {"test": &profile}
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                ProfileStore::load(path.clone()).unwrap().profiles["test"].quick_check,
+                QuickCheck::Both
+            );
+        }
+        store.save(profile.clone()).unwrap();
+        for check in [
+            QuickCheck::None,
+            QuickCheck::Size,
+            QuickCheck::Timestamp,
+            QuickCheck::Both,
+        ] {
+            profile.quick_check = check;
+            store.update("test", profile.clone()).unwrap();
+            let saved = ProfileStore::load(path.clone()).unwrap();
+            assert_eq!(saved.profiles["test"].quick_check, check);
+        }
+        profile.quick_check = QuickCheck::Size;
+        profile.name = "renamed".into();
+        store.update("test", profile.clone()).unwrap();
+        profile.name = "copy".into();
+        store.save(profile).unwrap();
+        let saved = ProfileStore::load(path).unwrap();
+        assert_eq!(saved.profiles["renamed"].quick_check, QuickCheck::Size);
+        assert_eq!(saved.profiles["copy"].quick_check, QuickCheck::Size);
+        let mut value = serde_json::to_value(&saved.profiles["copy"]).unwrap();
+        for invalid in [
+            serde_json::json!(false),
+            serde_json::json!(null),
+            serde_json::json!("invalid"),
+        ] {
+            value["quick_check"] = invalid;
+            assert!(serde_json::from_value::<Profile>(value.clone()).is_err());
+        }
+        // Legacy v1 loading is offline and also defaults to Both.
+        let legacy = dir.path().join("legacy.json");
+        fs::write(
+            &legacy,
+            serde_json::to_vec(&serde_json::json!({
+                "version": 1, "profiles": {"old": { "name": "old", "left": "missing-local",
+                    "right": "sftp://server/missing" }}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            ProfileStore::load(legacy).unwrap().profiles["old"].quick_check,
+            QuickCheck::Both
+        );
     }
 
     #[test]

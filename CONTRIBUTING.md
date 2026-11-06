@@ -113,7 +113,7 @@ At the moment, these kind of contributions are more appreciated and should be pr
 - **New file transfers**: for further details see [Implementing File Transfer](#implementing-file-transfers). ⚠️ this is going to be deprecated SOON! We're moving the file transfers into another library. Please see [remotefs-rs](https://github.com/veeso/remotefs-rs).
 - **Code optimizations**: any optimization to the code is welcome
 - See also features described in [Upcoming features](./README.md##upcoming-features-). Open an issue first though.
-- README/User manual **translations**: really appreciated atm. Please just add a folder into `docs/` with the language code. Language code with two characters is used in case the language is understandable by all the countries where this language is spoken (e.g. `it-CH`, `it-IT` are not really different, so I just created `it`, but there is a big difference from `zh-CN` and `zh-TW` for instance). Don't worry about flags in README, I will implement that part if it's too complicated.
+- **Documentation improvements**: keep the English user manual under `docs/en-US/` in sync with application behavior.
 
 For any other kind of contribution, especially for new features, please submit a new issue first.
 

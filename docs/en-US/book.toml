@@ -10,7 +10,7 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/veeso/termscp"
 edit-url-template = "https://github.com/veeso/termscp/edit/main/docs/en-US/{path}"
-additional-js = ["lang-switcher.js", "mermaid.min.js", "mermaid-init.js"]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.html.fold]
 enable = true

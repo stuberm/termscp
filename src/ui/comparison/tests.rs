@@ -42,6 +42,66 @@ fn settings_themes_apply_persist_and_return_to_previous_selection() {
 }
 
 #[test]
+fn general_parallelism_setting_is_saved_without_rewriting_profiles() {
+    use crate::comparison::settings::Parallelism;
+    let root = tempfile::tempdir().unwrap();
+    let mut app = app(root.path());
+    let mut profile = Profile::new(
+        "fixed".into(),
+        "sftp://source/folder",
+        "sftp://destination/folder",
+        vec![],
+    )
+    .unwrap();
+    let two = Parallelism::try_from(2).unwrap();
+    profile.parallel_comparisons = Some(two);
+    app.store.save(profile.clone()).unwrap();
+    let mut inherited = profile.clone();
+    inherited.name = "inherited".into();
+    inherited.parallel_comparisons = None;
+    app.store.save(inherited).unwrap();
+    app.mode = Mode::Profiles { selected: 2 };
+    press(&mut app, KeyCode::F(4));
+    press(&mut app, KeyCode::Down);
+    press(&mut app, KeyCode::Right);
+    assert_eq!(app.theme.parallel_comparisons.get(), 5);
+    assert_eq!(
+        ThemeSettings::load(root.path().join("comparison-ui.json"))
+            .parallel_comparisons
+            .get(),
+        5
+    );
+    assert_eq!(app.store.profiles["fixed"].parallel_comparisons, Some(two));
+    assert_eq!(app.store.profiles["inherited"].parallel_comparisons, None);
+    assert_eq!(
+        app.store.profiles["fixed"].effective_parallelism(app.theme.parallel_comparisons),
+        two
+    );
+    assert_eq!(
+        app.store.profiles["inherited"]
+            .effective_parallelism(app.theme.parallel_comparisons)
+            .get(),
+        5
+    );
+    press(&mut app, KeyCode::Left);
+    assert_eq!(app.theme.parallel_comparisons.get(), 4);
+    press(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Profiles { selected: 2 }));
+}
+
+#[test]
+fn general_parallelism_write_failure_keeps_the_previous_value() {
+    let root = tempfile::tempdir().unwrap();
+    let mut app = app(root.path());
+    app.theme = ThemeSettings::load(root.path().join("missing").join("comparison-ui.json"));
+    press(&mut app, KeyCode::F(4));
+    press(&mut app, KeyCode::Down);
+    press(&mut app, KeyCode::Right);
+    assert_eq!(app.theme.parallel_comparisons.get(), 4);
+    assert!(app.message.contains("Could not save parallel comparisons"));
+}
+
+#[test]
 fn settings_cancels_pending_diff_load_and_preserves_open_diff_on_return() {
     let root = tempfile::tempdir().unwrap();
     let mut app = app(root.path());
@@ -57,6 +117,7 @@ fn settings_cancels_pending_diff_load_and_preserves_open_diff_on_return() {
     app.mode = Mode::Diff {
         view: crate::comparison::text::diff("test.rs".into(), "a\n", "b\n"),
         selected: 1,
+        path: "test.rs".into(),
     };
     press(&mut app, KeyCode::F(4));
     press(&mut app, KeyCode::Esc);
@@ -69,13 +130,15 @@ fn folders_duplicate_and_move_profiles_without_touching_endpoints() {
     let source = tempfile::tempdir().unwrap();
     let destination = tempfile::tempdir().unwrap();
     let mut app = app(root.path());
-    let profile = Profile::new(
+    let mut profile = Profile::new(
         "Website".into(),
         source.path().to_str().unwrap(),
         destination.path().to_str().unwrap(),
         vec![".git".into()],
     )
     .unwrap();
+    profile.parallel_comparisons =
+        Some(crate::comparison::settings::Parallelism::try_from(6).unwrap());
     app.store.save(profile.clone()).unwrap();
     press(&mut app, KeyCode::Char('f'));
     for character in "Work".chars() {
@@ -99,6 +162,7 @@ fn folders_duplicate_and_move_profiles_without_touching_endpoints() {
     assert!(editor.original.is_none());
     let copy = editor.profile().unwrap();
     assert_eq!(copy.name, "Website copy");
+    assert_eq!(copy.parallel_comparisons, profile.parallel_comparisons);
     assert_eq!(copy.source, profile.source);
     assert_eq!(copy.destination, profile.destination);
     assert_eq!(copy.ignores, profile.ignores);
@@ -181,7 +245,8 @@ fn folder_deletion_confirms_and_preserves_profiles() {
 
 #[test]
 fn folder_picker_and_delete_confirmation_render_at_small_sizes() {
-    use tuirealm::ratatui::{Terminal, backend::TestBackend};
+    use tuirealm::ratatui::Terminal;
+    use tuirealm::ratatui::backend::TestBackend;
     let root = tempfile::tempdir().unwrap();
     let mut app = app(root.path());
     for number in 0..30 {
@@ -284,6 +349,8 @@ pub(super) fn app(directory: &std::path::Path) -> App {
         mode: Mode::Profiles { selected: 0 },
         generation: 0,
         busy: false,
+        comparison_timer: ComparisonTimer::default(),
+        comparison_mode: ComparisonMode::default(),
         loading_diff: false,
         message: String::new(),
         keyring: false,
@@ -299,10 +366,8 @@ fn press(app: &mut App, code: KeyCode) {
 
 #[test]
 fn ignore_selected_persists_exact_relative_path_and_removes_subtree() {
-    use crate::comparison::{
-        Row,
-        filesystem::{Entry, Kind},
-    };
+    use crate::comparison::Row;
+    use crate::comparison::filesystem::{Entry, Kind};
     let root = tempfile::tempdir().unwrap();
     let mut app = app(root.path());
     let profile = Profile::new(
@@ -325,6 +390,7 @@ fn ignore_selected_persists_exact_relative_path_and_removes_subtree() {
                     Kind::File
                 },
                 size: None,
+                modified: None,
             }),
             right: None,
             status: Status::Pending,
@@ -365,12 +431,11 @@ fn ignore_selected_persists_exact_relative_path_and_removes_subtree() {
 
 #[test]
 fn ignoring_during_scan_preserves_worker_and_filters_queued_and_final_results() {
-    use crate::comparison::{
-        Row,
-        filesystem::{Entry, Kind},
-    };
     use std::path::Path;
     use std::time::Instant;
+
+    use crate::comparison::Row;
+    use crate::comparison::filesystem::{Entry, Kind};
     let config = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();
     let destination = tempfile::tempdir().unwrap();
@@ -378,6 +443,12 @@ fn ignoring_during_scan_preserves_worker_and_filters_queued_and_final_results() 
         std::fs::create_dir_all(root.join("parent/ignored")).unwrap();
         std::fs::write(root.join("parent/ignored/file"), content).unwrap();
         std::fs::write(root.join("parent/keep"), "same").unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(root.join("parent/keep"))
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(100))
+            .unwrap();
     }
     let mut app = app(config.path());
     let profile = Profile::new(
@@ -394,7 +465,11 @@ fn ignoring_during_scan_preserves_worker_and_filters_queued_and_final_results() 
         ("parent/ignored", Kind::Directory, Status::Pending),
         ("parent/keep", Kind::File, Status::Equal),
     ] {
-        let entry = Entry { kind, size: None };
+        let entry = Entry {
+            kind,
+            size: None,
+            modified: None,
+        };
         app.browser.rows.insert(
             path.into(),
             Row {
@@ -433,16 +508,22 @@ fn ignoring_during_scan_preserves_worker_and_filters_queued_and_final_results() 
         std::thread::sleep(Duration::from_millis(1));
     }
     assert_eq!(app.generation, generation);
-    assert_eq!(app.browser.rows[Path::new("parent")].status, Status::Equal);
+    assert_eq!(
+        app.browser.rows[Path::new("parent")].status,
+        Status::QuickMatch
+    );
     assert_eq!(
         app.browser.rows[Path::new("parent/keep")].status,
-        Status::Equal
+        Status::QuickMatch
     );
     // Ignoring the remaining file after completion must not mark other results pending.
     press(&mut app, KeyCode::Char('i'));
     assert!(!app.busy);
     assert_eq!(app.generation, generation);
-    assert_eq!(app.browser.rows[Path::new("parent")].status, Status::Equal);
+    assert_eq!(
+        app.browser.rows[Path::new("parent")].status,
+        Status::QuickMatch
+    );
     assert!(app.browser.visible.is_empty());
     assert_eq!(
         app.store.profiles["live"].ignores,
@@ -458,15 +539,16 @@ fn ignoring_during_scan_preserves_worker_and_filters_queued_and_final_results() 
         std::thread::sleep(Duration::from_millis(1));
     }
     assert_eq!(app.browser.rows.len(), 1);
-    assert_eq!(app.browser.rows[Path::new("parent")].status, Status::Equal);
+    assert_eq!(
+        app.browser.rows[Path::new("parent")].status,
+        Status::QuickMatch
+    );
 }
 
 #[test]
 fn ignore_unsaved_comparison_does_not_save_or_broaden_wildcard_names() {
-    use crate::comparison::{
-        Row,
-        filesystem::{Entry, Kind},
-    };
+    use crate::comparison::Row;
+    use crate::comparison::filesystem::{Entry, Kind};
     let root = tempfile::tempdir().unwrap();
     let mut app = app(root.path());
     app.profile = Some(
@@ -488,6 +570,7 @@ fn ignore_unsaved_comparison_does_not_save_or_broaden_wildcard_names() {
                 left: Some(Entry {
                     kind: Kind::File,
                     size: None,
+                    modified: None,
                 }),
                 right: None,
                 status: Status::LeftOnly,
@@ -617,7 +700,11 @@ fn compare_key_toggles_all_and_differences_without_restarting_the_worker() {
         ("same-file", Kind::File, Status::Equal),
         ("different-file", Kind::File, Status::Different),
     ] {
-        let entry = Entry { kind, size: None };
+        let entry = Entry {
+            kind,
+            size: None,
+            modified: None,
+        };
         let row = crate::comparison::Row {
             path: name.into(),
             left: Some(entry.clone()),
@@ -770,11 +857,10 @@ fn remote_password_prompts_are_separate_and_never_saved() {
 
 #[test]
 fn enter_opens_file_diff_even_while_folder_scan_is_busy() {
-    use crate::comparison::{
-        Row, Status,
-        filesystem::{Entry, Kind},
-    };
     use std::time::{Duration, Instant};
+
+    use crate::comparison::filesystem::{Entry, Kind};
+    use crate::comparison::{Row, Status};
     let root = tempfile::tempdir().unwrap();
     let left = root.path().join("left");
     let right = root.path().join("right");
@@ -801,9 +887,11 @@ fn enter_opens_file_diff_even_while_folder_scan_is_busy() {
     }
     // Model an active scan with a paired row already visible.
     app.busy = true;
+    app.comparison_timer.start(Instant::now());
     let entry = Entry {
         kind: Kind::File,
         size: None,
+        modified: None,
     };
     app.browser.rows.insert(
         "file".into(),
@@ -820,6 +908,13 @@ fn enter_opens_file_diff_even_while_folder_scan_is_busy() {
     assert!(app.busy);
     press(&mut app, KeyCode::Enter);
     assert!(app.loading_diff);
+    assert!(matches!(
+        app.comparison_timer,
+        ComparisonTimer::Finished {
+            outcome: Outcome::Interrupted,
+            ..
+        }
+    ));
     let deadline = Instant::now() + Duration::from_secs(5);
     while app.busy {
         assert!(
@@ -832,6 +927,24 @@ fn enter_opens_file_diff_even_while_folder_scan_is_busy() {
     assert!(
         matches!(&app.mode, Mode::Diff { view, .. } if view.left == "old\n" && view.right == "new\n")
     );
+    let generation = app.generation;
+    let timer = app.comparison_timer.label();
+    press(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Browse));
+    assert!(!app.busy);
+    assert_eq!(app.generation, generation);
+    assert_eq!(
+        app.browser.rows[std::path::Path::new("file")].status,
+        Status::Pending
+    );
+    assert_eq!(app.comparison_timer.label(), timer);
+    assert!(matches!(
+        app.comparison_timer,
+        ComparisonTimer::Finished {
+            outcome: Outcome::Interrupted,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -841,6 +954,7 @@ fn diff_function_keys_select_copy_direction_and_scope() {
     app.mode = Mode::Diff {
         view: crate::comparison::text::diff("test".into(), "a\nold\nb\nold\n", "a\nnew\nb\nnew\n"),
         selected: 1,
+        path: "test".into(),
     };
     for (key, expected) in [
         (5, (true, false)),
@@ -849,7 +963,13 @@ fn diff_function_keys_select_copy_direction_and_scope() {
         (8, (false, true)),
     ] {
         press(&mut app, KeyCode::F(key));
-        assert_eq!(app.pending_copy, Some(expected));
+        assert_eq!(
+            app.pending_copy,
+            Some(PendingCopy::Diff {
+                to_right: expected.0,
+                whole: expected.1
+            })
+        );
         press(&mut app, KeyCode::Esc);
         assert!(app.pending_copy.is_none());
     }

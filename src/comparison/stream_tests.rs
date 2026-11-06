@@ -67,6 +67,7 @@ impl CompareFs for FakeFs {
             Entry {
                 kind: Kind::File,
                 size: None,
+                modified: None,
             },
         )])
     }
@@ -127,6 +128,28 @@ fn text_read_finalizes_even_on_encoding_errors() {
 }
 
 #[test]
+fn whole_file_copy_finalizes_live_reads_on_success_errors_and_cancellation() {
+    for (fail_read, fail_finish, cancelled, succeeds) in [
+        (false, false, false, true),
+        (true, false, false, false),
+        (false, true, false, false),
+        (false, false, true, false),
+    ] {
+        let mut fs = FakeFs::new(b"binary\0\r\n");
+        fs.fail_read = fail_read;
+        fs.fail_finish = fail_finish;
+        let result = copy::prepare(&mut fs, Path::new("file"), &AtomicBool::new(cancelled));
+        assert_eq!(result.is_ok(), succeeds);
+        assert_eq!(fs.finishes.load(Ordering::Relaxed), 1);
+        if let Ok(copy::Prepared::File(mut file)) = result {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+            assert_eq!(bytes, b"binary\0\r\n");
+        }
+    }
+}
+
+#[test]
 fn cancellation_after_discovery_preserves_pending_directories() {
     let a = tempfile::tempdir().unwrap();
     let b = tempfile::tempdir().unwrap();
@@ -168,6 +191,7 @@ fn case_sensitive_pairing_and_unknown_sizes_do_not_imply_equality() {
                 Entry {
                     kind: Kind::File,
                     size: None,
+                    modified: None,
                 },
             )])
         }
@@ -199,6 +223,7 @@ fn failed_nested_listing_is_not_mistaken_for_a_missing_file() {
                     Entry {
                         kind: Kind::Directory,
                         size: None,
+                        modified: None,
                     },
                 )])
             } else if self.fail {
@@ -209,6 +234,7 @@ fn failed_nested_listing_is_not_mistaken_for_a_missing_file() {
                     Entry {
                         kind: Kind::File,
                         size: Some(0),
+                        modified: None,
                     },
                 )])
             }

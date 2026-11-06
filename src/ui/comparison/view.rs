@@ -14,7 +14,7 @@ use crate::comparison::filesystem::{Entry, Kind};
 
 fn status_style(status: Status, palette: Palette) -> Style {
     Style::default().fg(match status {
-        Status::Equal | Status::Pending | Status::Unverified => palette.muted,
+        Status::Equal | Status::QuickMatch | Status::Pending | Status::Unverified => palette.muted,
         Status::Different | Status::TypeConflict => palette.warning,
         Status::LeftOnly => palette.source,
         Status::RightOnly => palette.destination,
@@ -33,17 +33,20 @@ fn block(palette: Palette, title: impl Into<String>) -> Block<'static> {
 
 /// File names/remote error text can contain terminal control characters. Render them visibly.
 fn safe(text: &str) -> String {
-    text.chars()
-        .flat_map(|character| {
-            if character.is_control() && character != '\t' {
-                character.escape_default().collect::<Vec<_>>()
-            } else if character == '\t' {
-                vec![' ', ' ', ' ', ' ']
-            } else {
-                vec![character]
-            }
-        })
-        .collect()
+    if !text.chars().any(char::is_control) {
+        return text.to_string();
+    }
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        if character == '\t' {
+            escaped.push_str("    ");
+        } else if character.is_control() {
+            escaped.extend(character.escape_default());
+        } else {
+            escaped.push(character);
+        }
+    }
+    escaped
 }
 
 fn file_cell(name: &str, entry: &Option<Entry>) -> String {
@@ -139,7 +142,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         areas[0],
     );
     match &app.mode {
-        Mode::Diff { view, selected } => {
+        Mode::Diff { view, selected, .. } => {
             let height = areas[1].height.saturating_sub(3) as usize;
             let offset = selected.saturating_sub(height / 2);
             let rows = view
@@ -240,7 +243,10 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         }
         Mode::Help => "Press any key to return",
         Mode::Browse => {
-            "↑↓/jk select  Enter open  ←/Backspace parent  d all/differences  f recursive  n/p difference\ni ignore selected  r refresh  c cancel  o profiles  s save/edit  a password/reconnect  ? help  q quit"
+            "↑↓/jk select  Shift+↑↓ range  F7 →/F8 ← copy  Enter open  ← parent  d filter  f recursive\ni ignore  r refresh  F5 full compare  c cancel  o profiles  s edit  a reconnect  ? help  q quit"
+        }
+        Mode::Copying => {
+            "Copy / targeted recheck in progress · c/Esc cancel after current I/O · do not close until complete"
         }
     };
     frame.render_widget(
@@ -273,10 +279,33 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App) {
         ),
         Mode::Help => dialog(
             frame,
-            "Folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh; c: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect; F4: Settings / Themes.\nSymlinks/special files are not followed or verified.\nMatching bytes, not timestamps, determine regular-file equality.\nText diff supports UTF-8 / Windows-1252 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
+            "Folder comparison\n\nEnter: descend into paired directories or open a file diff.\nMissing sides remain placeholders; browsing never creates folders.\nShift+Up/Down: extend/shrink selection; plain navigation clears it.\nF7 / F8: copy selected entries left → right / right → left; y confirms.\nFolders copy recursively, honoring ignores; binary files are supported.\nEsc: clear an idle selection. Copies do not delete extra destination files.\nd: show all entries / only differences (also includes unknown/errors).\nf: direct children / all descendants of the current directory.\nn / p: next / previous non-equal entry (wraps in folder view).\ni: ignore selected file/folder on both sides (saved with saved profiles).\nr: refresh using profile checks (both off = full); F5: full content comparison.\nQuick matches are metadata-only, not proof of identical contents.\nProfile editor (s): Size/Timestamp quick checks; both on by default, both off = full.\nc: cooperative cancellation after current I/O finishes.\no: profiles; s: save/edit current profile; a: password/reconnect; F4: general settings (theme/parallel comparisons).\nSymlinks/special files are not followed or verified.\nFull comparison uses normalized contents/SHA-256, never timestamps alone.\nCached hashes require live strong content-version validation.\nText diff supports UTF-8 / Windows-1252 up to 5 MiB / 10,000 lines per side.\n\nPress any key to return.",
             " Keyboard help ",
         ),
         _ => {}
+    }
+    if let Some(super::PendingCopy::Entries { paths, to_right }) = &app.pending_copy {
+        let names = paths
+            .iter()
+            .take(8)
+            .map(|path| safe(&path.display().to_string()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        dialog(
+            frame,
+            &format!(
+                "Copy {} selected file(s)/folder(s) {}?\n\n{}{}\n\nExisting files will be overwritten. Folders copy recursively; ignores are honored.\nSymlinks, special files and type conflicts stop the batch. Remote writes are not atomic; no rollback.\n\ny: confirm · any other key: cancel",
+                paths.len(),
+                if *to_right {
+                    "LEFT → RIGHT"
+                } else {
+                    "RIGHT → LEFT"
+                },
+                names,
+                if paths.len() > 8 { "\n…" } else { "" },
+            ),
+            " Confirm copy ",
+        );
     }
 }
 
@@ -377,7 +406,13 @@ fn draw_settings(frame: &mut Frame<'_>, app: &App, themes: bool, selected: usize
             })
             .collect::<Vec<_>>()
     } else {
-        vec![TableRow::new(["Themes", app.theme.theme.name()])]
+        vec![
+            TableRow::new(["Themes".to_string(), app.theme.theme.name().to_string()]),
+            TableRow::new([
+                "Parallel comparisons".to_string(),
+                app.theme.parallel_comparisons.get().to_string(),
+            ]),
+        ]
     };
     let table = Table::new(
         rows,
@@ -385,7 +420,7 @@ fn draw_settings(frame: &mut Frame<'_>, app: &App, themes: bool, selected: usize
     )
     .block(block(
         palette,
-        if themes { " Themes " } else { " Appearance " },
+        if themes { " Themes " } else { " General " },
     ))
     .row_highlight_style(
         Style::default()
@@ -396,7 +431,7 @@ fn draw_settings(frame: &mut Frame<'_>, app: &App, themes: bool, selected: usize
     frame.render_stateful_widget(
         table,
         areas[1],
-        &mut TableState::default().with_selected(Some(if themes { selected } else { 0 })),
+        &mut TableState::default().with_selected(Some(selected)),
     );
     frame.render_widget(
         Paragraph::new(format!(
@@ -405,7 +440,7 @@ fn draw_settings(frame: &mut Frame<'_>, app: &App, themes: bool, selected: usize
             if themes {
                 "↑↓/jk select · Enter apply and save · Esc back"
             } else {
-                "Enter open Themes · Esc return"
+                "↑↓/jk select · ←/→ change parallel count and save · Enter open/apply · Esc return"
             }
         ))
         .wrap(Wrap { trim: false }),
@@ -483,6 +518,7 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
         Constraint::Length(3),
         Constraint::Min(1),
         Constraint::Length(3),
+        Constraint::Length(1),
     ])
     .split(inner);
     draw_input(
@@ -542,13 +578,53 @@ fn draw_editor(frame: &mut Frame<'_>, app: &App, editor: &super::editor::Editor)
             }
         }
     }
+    let options =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(form[2]);
     draw_input(
         frame,
         &editor.ignores,
-        form[2],
+        options[0],
         " Ignore globs · semicolon-separated ",
         editor.field == editor.ignore_index(),
         palette,
+    );
+    draw_input(
+        frame,
+        &editor.parallelism_label(app.theme.parallel_comparisons),
+        options[1],
+        " Parallel comparisons · ←/→ · Ctrl-U default ",
+        editor.field == editor.parallelism_index(),
+        palette,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw("Quick checks: "),
+            Span::styled(
+                format!(
+                    "[{}] Size",
+                    if editor.quick_check.uses_size() {
+                        "x"
+                    } else {
+                        " "
+                    }
+                ),
+                input_style(editor.field == editor.quick_size_index(), palette),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!(
+                    "[{}] Timestamp",
+                    if editor.quick_check.uses_timestamp() {
+                        "x"
+                    } else {
+                        " "
+                    }
+                ),
+                input_style(editor.field == editor.quick_timestamp_index(), palette),
+            ),
+            Span::raw(" · both off = full · Space/←/→ toggle · Ctrl-U both"),
+        ])),
+        form[3],
     );
     frame.render_widget(Paragraph::new(format!("{}\nTab/Shift-Tab fields · F1 name/F2 source/F3 destination · Space/←→ type/options\nPasswords: native OS keychain (required) · Ctrl-U clear · Enter/Ctrl-S save & open · Esc cancel", safe(&app.message)))
         .wrap(Wrap { trim: false }), areas[1]);
@@ -631,7 +707,21 @@ fn draw_home(frame: &mut Frame<'_>, app: &App, selected: usize) {
 
 fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let palette = app.theme.theme.palette();
-    let sections = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+    let sections = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+    ])
+    .split(area);
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{} · {}",
+            app.comparison_timer.label(),
+            app.comparison_mode.label(app.quick_check())
+        ))
+        .style(Style::default().fg(palette.accent)),
+        sections[0],
+    );
     let option = |label: &str, selected: bool| {
         Span::styled(
             if selected {
@@ -650,9 +740,9 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
             option("Differences only", app.browser.differences_only),
             Span::raw("  d: toggle"),
         ])),
-        sections[0],
+        sections[1],
     );
-    let area = sections[1];
+    let area = sections[2];
     let height = area.height.saturating_sub(4) as usize;
     let offset = app.browser.selected.saturating_sub(height / 2);
     let rows = app
@@ -675,21 +765,30 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
                     .into_owned()
             };
             TableRow::new(vec![
-                Cell::from(file_cell(&name, &row.left)),
+                Cell::from(format!(
+                    "{}{}",
+                    if app.browser.marked.contains(path) {
+                        "✓ "
+                    } else {
+                        "  "
+                    },
+                    file_cell(&name, &row.left)
+                )),
                 Cell::from(row.status.label()),
                 Cell::from(file_cell(&name, &row.right)),
             ])
-            .style(status_style(row.status, palette))
+            .style(if app.browser.marked.contains(path) {
+                status_style(row.status, palette)
+                    .bg(palette.selection)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                status_style(row.status, palette)
+            })
         });
-    let equal = app
-        .browser
-        .rows
-        .values()
-        .filter(|row| row.status == Status::Equal)
-        .count();
+    let equal = app.browser.equal_count;
     let total = app.browser.rows.len();
     let title = format!(
-        " /{} · {} · {} · {} equal / {} total{} ",
+        " /{} · {} · {} · {} matches / {} total · {} selected{} ",
         safe(&app.browser.directory.display().to_string()),
         if app.browser.differences_only {
             "differences"
@@ -703,6 +802,7 @@ fn draw_browser(frame: &mut Frame<'_>, app: &App, area: Rect) {
         },
         equal,
         total,
+        app.browser.marked.len(),
         if app.busy { " · working…" } else { "" }
     );
     let table = Table::new(
@@ -773,11 +873,12 @@ fn dialog(frame: &mut Frame<'_>, message: &str, title: &str, palette: Palette) {
 
 #[cfg(test)]
 mod tests {
+    use tuirealm::ratatui::Terminal;
+    use tuirealm::ratatui::backend::TestBackend;
+
     use super::super::state::Browser;
     use super::*;
     use crate::comparison::profiles::ProfileStore;
-    use tuirealm::ratatui::Terminal;
-    use tuirealm::ratatui::backend::TestBackend;
 
     #[test]
     fn themes_color_screens_dialogs_selection_statuses_and_cached_syntax() {
@@ -789,6 +890,7 @@ mod tests {
             let entry = Entry {
                 kind: Kind::File,
                 size: None,
+                modified: None,
             };
             let row = crate::comparison::Row {
                 path: "source-only.rs".into(),
@@ -822,6 +924,7 @@ mod tests {
                         "fn main() { let x = 2; }\n",
                     ),
                     selected: 0,
+                    path: "test.rs".into(),
                 },
             ];
             for mode in modes {
@@ -888,6 +991,8 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Browse,
+            comparison_mode: Default::default(),
+            comparison_timer: Default::default(),
             theme: super::super::theme::ThemeSettings::load(
                 directory.path().join("comparison-ui.json"),
             ),
@@ -906,7 +1011,11 @@ mod tests {
             ("same-folder", Kind::Directory, Status::Equal),
             ("changed-file", Kind::File, Status::Different),
         ] {
-            let entry = Entry { kind, size: None };
+            let entry = Entry {
+                kind,
+                size: None,
+                modified: None,
+            };
             let row = crate::comparison::Row {
                 path: name.into(),
                 left: Some(entry.clone()),
@@ -965,6 +1074,8 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Profiles { selected: 0 },
+            comparison_mode: Default::default(),
+            comparison_timer: Default::default(),
             theme: super::super::theme::ThemeSettings::load(
                 directory.path().join("comparison-ui.json"),
             ),
@@ -1023,6 +1134,8 @@ mod tests {
             profile: None,
             worker: None,
             mode: Mode::Editor(editor),
+            comparison_mode: Default::default(),
+            comparison_timer: Default::default(),
             theme: super::super::theme::ThemeSettings::load(
                 directory.path().join("comparison-ui.json"),
             ),
@@ -1055,6 +1168,8 @@ mod tests {
                     "Secret access key",
                     "Password",
                     "validation-error-visible",
+                    "Parallel comparisons",
+                    "Use default (4)",
                 ] {
                     assert!(rendered.contains(text));
                 }
@@ -1080,7 +1195,8 @@ mod tests {
                 .position(|field| *field == Field::Password)
                 .unwrap();
         let ignore = editor.ignore_index();
-        for field in [0, source_secret, destination_password, ignore] {
+        let parallelism = editor.parallelism_index();
+        for field in [0, source_secret, destination_password, ignore, parallelism] {
             for (width, height) in [(120, 30), (40, 16)] {
                 let Mode::Editor(editor) = &mut app.mode else {
                     unreachable!()
@@ -1101,6 +1217,158 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn quick_checkboxes_render_all_four_choices_and_highlight_each_focus() {
+        use crate::comparison::settings::QuickCheck;
+        let config = tempfile::tempdir().unwrap();
+        let mut app = super::super::tests::app(config.path());
+        app.edit(None);
+        for (check, size, timestamp) in [
+            (QuickCheck::None, "[ ] Size", "[ ] Timestamp"),
+            (QuickCheck::Both, "[x] Size", "[x] Timestamp"),
+            (QuickCheck::Size, "[x] Size", "[ ] Timestamp"),
+            (QuickCheck::Timestamp, "[ ] Size", "[x] Timestamp"),
+        ] {
+            for focus_size in [true, false] {
+                let Mode::Editor(editor) = &mut app.mode else {
+                    unreachable!()
+                };
+                editor.quick_check = check;
+                editor.field = if focus_size {
+                    editor.quick_size_index()
+                } else {
+                    editor.quick_timestamp_index()
+                };
+                for (width, height) in [(120, 30), (40, 16), (20, 8), (1, 1)] {
+                    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                    terminal.draw(|frame| draw(frame, &app)).unwrap();
+                    if width >= 40 {
+                        let buffer = terminal.backend().buffer();
+                        let text = buffer
+                            .content
+                            .iter()
+                            .map(tuirealm::ratatui::buffer::Cell::symbol)
+                            .collect::<String>();
+                        assert!(text.contains(size), "{text}");
+                        assert!(text.contains(timestamp), "{text}");
+                        let selected = if focus_size { "Size" } else { "Timestamp" };
+                        let offset = buffer
+                            .content
+                            .windows(selected.len())
+                            .position(|cells| {
+                                cells
+                                    .iter()
+                                    .map(tuirealm::ratatui::buffer::Cell::symbol)
+                                    .collect::<String>()
+                                    == selected
+                            })
+                            .unwrap();
+                        assert_eq!(buffer.content[offset].fg, app.theme.theme.palette().accent);
+                        assert!(buffer.content[offset].modifier.contains(Modifier::BOLD));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_sanitization_preserves_text_and_escapes_all_control_characters() {
+        assert_eq!(safe("plain/path界🙂.txt"), "plain/path界🙂.txt");
+        assert_eq!(safe("a\tb\n\r\0\x1b[31m"), "a    b\\n\\r\\u{0}\\u{1b}[31m");
+        for character in (0..=0x9f).filter_map(char::from_u32) {
+            if character.is_control() && character != '\t' {
+                assert_eq!(
+                    safe(&character.to_string()),
+                    character.escape_default().to_string()
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual CPU benchmark; compare the same build profile before/after"]
+    fn browser_render_cpu_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        use crate::comparison::Row;
+        let root = tempfile::tempdir().unwrap();
+        for count in [100, 100_000] {
+            let mut app = super::super::tests::app(root.path());
+            app.mode = Mode::Browse;
+            for index in 0..count {
+                let path = std::path::PathBuf::from(format!("representative-file-{index:06}.rs"));
+                let entry = Some(Entry {
+                    kind: Kind::File,
+                    size: Some(100),
+                    modified: None,
+                });
+                app.browser.rows.insert(
+                    path.clone(),
+                    Row {
+                        path,
+                        left: entry.clone(),
+                        right: entry,
+                        status: Status::Equal,
+                        detail: String::new(),
+                        aggregate_base: None,
+                    },
+                );
+            }
+            app.browser.rebuild();
+            let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+            let started = Instant::now();
+            for _ in 0..100 {
+                terminal.draw(|frame| draw(frame, black_box(&app))).unwrap();
+                black_box(terminal.backend().buffer());
+            }
+            eprintln!(
+                "{count} inventory rows: {:.3}ms/frame (100 frames)",
+                started.elapsed().as_secs_f64() * 10.0
+            );
+        }
+    }
+
+    #[test]
+    fn general_settings_render_parallelism_and_profile_default_tracks_the_setting() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = super::super::tests::app(root.path());
+        app.theme.parallel_comparisons =
+            crate::comparison::settings::Parallelism::try_from(8).unwrap();
+        app.mode = Mode::Settings {
+            previous: Box::new(Mode::Browse),
+            themes: false,
+            selected: 1,
+        };
+        for (width, height) in [(100, 30), (40, 12), (1, 1)] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| draw(frame, &app)).unwrap();
+            if width == 100 {
+                let rendered: String = terminal
+                    .backend()
+                    .buffer()
+                    .content
+                    .iter()
+                    .map(tuirealm::ratatui::buffer::Cell::symbol)
+                    .collect();
+                assert!(rendered.contains("Parallel comparisons"));
+                assert!(rendered.contains('8'));
+                assert!(rendered.contains("General"));
+            }
+        }
+        app.mode = Mode::Editor(super::super::editor::Editor::new(None, None));
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|frame| draw(frame, &app)).unwrap();
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(tuirealm::ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(rendered.contains("Use default (8)"));
     }
 
     #[test]
@@ -1126,6 +1394,8 @@ mod tests {
             generation: 0,
             busy: false,
             loading_diff: false,
+            comparison_mode: Default::default(),
+            comparison_timer: Default::default(),
             home_folder: None,
             theme: super::super::theme::ThemeSettings::load(
                 directory.path().join("comparison-ui.json"),

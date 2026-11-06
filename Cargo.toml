@@ -50,15 +50,18 @@ content_inspector = "0.2"
 crossterm = "0.29"
 dirs = "7"
 edit = "0.1"
+encoding_rs = "0.8"
 filetime = "0.2"
 keyring-core = "1"
 lazy-regex = "3"
 log = "0.4"
 md-5 = "0.11"
+memchr = "2"
 notify = "8"
 notify-rust = { version = "4", default-features = false, features = ["d"] }
 nucleo = "0.5"
 open = "5"
+percent-encoding = "2"
 rand = "0.10"
 regex = "1"
 remotefs = "1"
@@ -69,19 +72,17 @@ remotefs-smb = { version = "1", default-features = false, optional = true, featu
 remotefs-ssh = { version = "1", default-features = false, features = ["russh"] }
 remotefs-webdav = { version = "1", features = ["tokio"] }
 rpassword = "7"
+rusqlite = { version = "0.38", features = ["bundled"] }
 self_update = { version = "0.42", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate", "rustls"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
 shellexpand = "3"
-simplelog = "0.12"
 similar = "2"
-url = "2"
-encoding_rs = "0.8"
-syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
-percent-encoding = "2"
+simplelog = "0.12"
 ssh2-config = "0.8"
+syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
@@ -90,6 +91,7 @@ tui-realm-stdlib = "4"
 tui-term = "0.3"
 tuirealm = "4"
 unicode-width = "0.2"
+url = "2"
 whoami = "2"
 wildmatch = "2"
 
@@ -136,6 +138,10 @@ redundant_closure_for_method_calls = "warn"
 style = { level = "warn", priority = -1 }
 suspicious = { level = "warn", priority = -1 }
 unnested_or_patterns = "warn"
+
+# Narrow SFTP read-window/finalization fix; see vendor/remotefs-ssh/SIDEMIRROR.md.
+[patch.crates-io]
+remotefs-ssh = { path = "vendor/remotefs-ssh" }
 
 [profile.dev]
 incremental = true

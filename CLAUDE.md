@@ -112,5 +112,5 @@ Platform-specific dependencies: SSH and FTP crates use different TLS backends on
 
 - Always run `just fmt` and `just clippy "-- -D warnings"` after modifying Rust code
 - Always put plans to `./.claude/plans/`
-- When changing behavior that is documented under `docs/` (paths, config keys, commands, flags, etc.), update BOTH `docs/en-US/` and `docs/zh-CN/` to keep the translations in sync
+- When changing behavior that is documented under `docs/` (paths, config keys, commands, flags, etc.), update the English documentation under `docs/en-US/`
 - All code must be cross-platform compatible (Windows, macOS, Linux) — avoid POSIX-only APIs, hardcoded path separators, or shell-specific behavior unless gated behind the `posix`/`win` cfg aliases
